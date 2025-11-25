@@ -10,6 +10,7 @@ from einops import rearrange
 from model_dict import get_model
 from utils.normalizer import UnitTransformer
 import matplotlib.pyplot as plt
+import wandb
 
 parser = argparse.ArgumentParser('Training Transolver')
 
@@ -36,12 +37,17 @@ parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
 parser.add_argument('--slice_num', type=int, default=32)
 parser.add_argument('--eval', type=int, default=0)
-parser.add_argument('--save_name', type=str, default='burg')
+parser.add_argument('--save_name', type=str, default='darcy')
 parser.add_argument('--data_path', type=str, default='/data/fno')
 parser.add_argument('--seed', type=int, default=1)
 
 args = parser.parse_args()
 set_seed(args.seed)
+
+wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
+wandb.init(project='transolver', name=args.save_name)
+wandb.config.update(args)
+
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 train_path = args.data_path + '/piececonst_r421_N1024_smooth1.mat'
@@ -229,7 +235,7 @@ def main():
 
             rel_err /= ntest
             print("rel_err:{}".format(rel_err))
-
+            wandb.log({"test_loss": rel_err}, step=ep)
             if ep % 100 == 0:
                 if not os.path.exists('./checkpoints'):
                     os.makedirs('./checkpoints')

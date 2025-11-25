@@ -1,0 +1,98 @@
+_wandb:
+    value:
+        cli_version: 0.22.0
+        e:
+            uqdese3p08xyb9anw7q6yc4535j1k4p7:
+                codePath: PDE-Solving-StandardBenchmark/exp_burg.py
+                codePathLocal: exp_burg.py
+                cpu_count: 16
+                cpu_count_logical: 32
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "3936290357248"
+                        used: "2908815159296"
+                email: mattlowery10@gmail.com
+                executable: /home/matt/miniconda3/envs/torch/bin/python3
+                git:
+                    commit: 0c607f1291d4f00379ec90995ea713098b47663f
+                    remote: https://github.com/matthew-lowery/Transolver.git
+                gpu: NVIDIA GeForce RTX 4080
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 9728
+                      memoryTotal: "17171480576"
+                      name: NVIDIA GeForce RTX 4080
+                      uuid: GPU-31bb36e4-f1e5-496e-7290-140d2ce46efc
+                host: alberto-System-Product-Name
+                memory:
+                    total: "66506379264"
+                os: Linux-6.8.0-87-generic-x86_64-with-glibc2.35
+                program: /home/matt/Transolver/PDE-Solving-StandardBenchmark/exp_burg.py
+                python: CPython 3.13.7
+                root: /home/matt/Transolver/PDE-Solving-StandardBenchmark
+                startedAt: "2025-11-25T01:01:39.773712Z"
+                writerId: uqdese3p08xyb9anw7q6yc4535j1k4p7
+        m: []
+        python_version: 3.13.7
+        t:
+            "1":
+                - 1
+                - 41
+                - 49
+                - 63
+            "2":
+                - 1
+                - 41
+                - 49
+                - 63
+            "3":
+                - 13
+                - 61
+            "4": 3.13.7
+            "5": 0.22.0
+            "12": 0.22.0
+            "13": linux-x86_64
+batch_size:
+    value: 100
+data_path:
+    value: /data/fno
+downsample:
+    value: 1
+dropout:
+    value: 0
+epochs:
+    value: 10000
+eval:
+    value: 0
+gpu:
+    value: "0"
+lr:
+    value: 0.001
+max_grad_norm:
+    value: null
+mlp_ratio:
+    value: 1
+model:
+    value: Transolver_Irregular_Mesh
+n_heads:
+    value: 4
+n_hidden:
+    value: 128
+n_layers:
+    value: 4
+ntrain:
+    value: 1000
+ref:
+    value: 8
+save_name:
+    value: burg
+seed:
+    value: 1
+slice_num:
+    value: 32
+unified_pos:
+    value: 0
+weight_decay:
+    value: 1e-05
