@@ -1,45 +1,55 @@
 import os
-import matplotlib.pyplot as plt
 import argparse
-import scipy.io as scio
 import numpy as np
+import scipy.io as scio
 import torch
+import torch.nn.functional as F
 from tqdm import *
 from utils.testloss import TestLoss
+from einops import rearrange
 from model_dict import get_model
+from utils.normalizer import UnitTransformer
+import matplotlib.pyplot as plt
 
-parser = argparse.ArgumentParser('Training Transformer')
+parser = argparse.ArgumentParser('Training Transolver')
+
+
+def set_seed(seed):    
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.cuda.manual_seed(seed)
 
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--epochs', type=int, default=500)
+parser.add_argument('--epochs', type=int, default=10_000)
 parser.add_argument('--weight_decay', type=float, default=1e-5)
-parser.add_argument('--model', type=str, default='Transolver_2D')
+parser.add_argument('--model', type=str, default='Transolver_Structured_Mesh_3D')
 parser.add_argument('--n-hidden', type=int, default=64, help='hidden dim')
-parser.add_argument('--n-layers', type=int, default=3, help='layers')
+parser.add_argument('--n-layers', type=int, default=8, help='layers')
 parser.add_argument('--n-heads', type=int, default=4)
-parser.add_argument('--batch-size', type=int, default=8)
+parser.add_argument('--batch-size', type=int, default=1)
 parser.add_argument("--gpu", type=str, default='0', help="GPU index to use")
 parser.add_argument('--max_grad_norm', type=float, default=None)
 parser.add_argument('--downsample', type=int, default=1)
 parser.add_argument('--mlp_ratio', type=int, default=1)
 parser.add_argument('--dropout', type=float, default=0.0)
+parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
 parser.add_argument('--slice_num', type=int, default=32)
 parser.add_argument('--eval', type=int, default=0)
-parser.add_argument('--save_name', type=str, default='ns_2d_UniPDE')
+parser.add_argument('--save_name', type=str, default='burg')
 parser.add_argument('--data_path', type=str, default='/data/fno')
-args = parser.parse_args()
+parser.add_argument('--seed', type=int, default=1)
 
+args = parser.parse_args()
+seed_set(args.seed)
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-data_path = args.data_path + '/NavierStokes_V1e-5_N1200_T20/NavierStokes_V1e-5_N1200_T20.mat'
-# data_path = args.data_path + '/NavierStokes_V1e-5_N1200_T20.mat'
-ntrain = 1000
-ntest = 200
-T_in = 10
-T = 10
-step = 1
+train_path = args.data_path + '/piececonst_r421_N1024_smooth1.mat'
+test_path = args.data_path + '/piececonst_r421_N1024_smooth2.mat'
+ntrain = 90
+ntest = 10
+epochs = args.epochs
 eval = args.eval
 save_name = args.save_name
 
@@ -53,180 +63,181 @@ def count_parameters(model):
     print(f"Total Trainable Params: {total_params}")
     return total_params
 
-
 def main():
     r = args.downsample
-    h = int(((64 - 1) / r) + 1)
+    h = int(((421 - 1) / r) + 1)
+    s = h
+    dx = 1.0 / s
 
-    data = scio.loadmat(data_path)
-    print(data['u'].shape)
-    train_a = data['u'][:ntrain, ::r, ::r, :T_in][:, :h, :h, :]
-    train_a = train_a.reshape(train_a.shape[0], -1, train_a.shape[-1])
-    train_a = torch.from_numpy(train_a)
-    train_u = data['u'][:ntrain, ::r, ::r, T_in:T + T_in][:, :h, :h, :]
-    train_u = train_u.reshape(train_u.shape[0], -1, train_u.shape[-1])
-    train_u = torch.from_numpy(train_u)
+    fp = '../../deep_gp_op/datasets/ns_pdebench_pres_t0_t1_mach_1.0.npz'
+    data = np.load(fp)
+    dataset = fp.split('/')[-1].split('.')[0]
+    x, x_grid, y= data["x"], data["x_grid"], data["y"]
+    
+    x = x[:,::2,::2,::2].reshape(ntrain + ntest,-1,1)
+    y = y[:,::2,::2,::2].reshape(ntrain + ntest,-1)
 
-    test_a = data['u'][-ntest:, ::r, ::r, :T_in][:, :h, :h, :]
-    test_a = test_a.reshape(test_a.shape[0], -1, test_a.shape[-1])
-    test_a = torch.from_numpy(test_a)
-    test_u = data['u'][-ntest:, ::r, ::r, T_in:T + T_in][:, :h, :h, :]
-    test_u = test_u.reshape(test_u.shape[0], -1, test_u.shape[-1])
-    test_u = torch.from_numpy(test_u)
+    x_grid = data['x_grid']
+    x_grid = np.asarray(np.meshgrid(x_grid, x_grid, x_grid)).transpose(1,2,3,0)
+    x_grid = x_grid[::2,::2,::2].reshape(-1,3)
 
-    x = np.linspace(0, 1, h)
-    y = np.linspace(0, 1, h)
-    x, y = np.meshgrid(x, y)
-    pos = np.c_[x.ravel(), y.ravel()]
-    pos = torch.tensor(pos, dtype=torch.float).unsqueeze(0)
+    x = torch.tensor(x, dtype=torch.float32); x_grid = torch.tensor(x_grid, dtype=torch.float32); y = torch.tensor(y, dtype=torch.float32)
+    print(x.shape)
+
+    x_train, x_test = x[:ntrain], x[-ntest:]
+    y_train, y_test = y[:ntrain], y[-ntest:]
+
+    x_normalizer = UnitTransformer(x_train)
+    y_normalizer = UnitTransformer(y_train)
+
+    x_train = x_normalizer.encode(x_train)
+    x_test = x_normalizer.encode(x_test)
+    y_train = y_normalizer.encode(y_train)
+
+    x_normalizer.cuda()
+    y_normalizer.cuda()
+
+    pos = x_grid
     pos_train = pos.repeat(ntrain, 1, 1)
     pos_test = pos.repeat(ntest, 1, 1)
-
-    train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_train, train_a, train_u),
-                                               batch_size=args.batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_test, test_a, test_u),
-                                              batch_size=args.batch_size, shuffle=False)
-
     print("Dataloading is over.")
 
-    model = get_model(args).Model(space_dim=2,
+    train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_train, x_train, y_train),
+                                               batch_size=args.batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_test, x_test, y_test),
+                                              batch_size=args.batch_size, shuffle=False)
+
+    model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,
                                   n_hidden=args.n_hidden,
                                   dropout=args.dropout,
                                   n_head=args.n_heads,
                                   Time_Input=False,
                                   mlp_ratio=args.mlp_ratio,
-                                  fun_dim=T_in,
+                                  fun_dim=1,
                                   out_dim=1,
                                   slice_num=args.slice_num,
                                   ref=args.ref,
                                   unified_pos=args.unified_pos,
-                                  H=h, W=h).cuda()
+                                  H=64, W=64, D=64).cuda()
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     print(args)
     print(model)
     count_parameters(model)
 
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, epochs=args.epochs,
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, epochs=epochs,
                                                     steps_per_epoch=len(train_loader))
     myloss = TestLoss(size_average=False)
+    de_x = TestLoss(size_average=False)
+    de_y = TestLoss(size_average=False)
 
     if eval:
+        print("model evaluation")
+        print(s, s)
         model.load_state_dict(torch.load("./checkpoints/" + save_name + ".pt"), strict=False)
         model.eval()
         showcase = 10
         id = 0
-
         if not os.path.exists('./results/' + save_name + '/'):
             os.makedirs('./results/' + save_name + '/')
 
-        test_l2_full = 0
         with torch.no_grad():
-            for x, fx, yy in test_loader:
-                id += 1
-                x, fx, yy = x.cuda(), fx.cuda(), yy.cuda()  # x : B, 4096, 2  fx : B, 4096  y : B, 4096, T
-                bsz = x.shape[0]
-                for t in range(0, T, step):
-                    im = model(x, fx=fx)
+            rel_err = 0.0
+            with torch.no_grad():
+                for x, fx, y in test_loader:
+                    id += 1
+                    x, fx, y = x.cuda(), fx.cuda(), y.cuda()
+                    out = model(x, fx=fx.unsqueeze(-1)).squeeze(-1)
+                    out = y_normalizer.decode(out)
+                    tl = myloss(out, y).item()
 
-                    fx = torch.cat((fx[..., step:], im), dim=-1)
-                    if t == 0:
-                        pred = im
-                    else:
-                        pred = torch.cat((pred, im), -1)
+                    rel_err += tl
 
-                if id < showcase:
-                    print(id)
-                    plt.figure()
-                    plt.axis('off')
-                    plt.imshow(im[0, :, 0].reshape(64, 64).detach().cpu().numpy(), cmap='coolwarm')
-                    plt.colorbar()
-                    plt.clim(-3, 3)
-                    plt.savefig(
-                        os.path.join('./results/' + save_name + '/',
-                                     "case_" + str(id) + "_pred_" + str(20) + ".pdf"))
-                    plt.close()
-                    # ============ #
-                    plt.figure()
-                    plt.axis('off')
-                    plt.imshow(yy[0, :, t].reshape(64, 64).detach().cpu().numpy(), cmap='coolwarm')
-                    plt.colorbar()
-                    plt.clim(-3, 3)
-                    plt.savefig(
-                        os.path.join('./results/' + save_name + '/', "case_" + str(id) + "_gt_" + str(20) + ".pdf"))
-                    plt.close()
-                    # ============ #
-                    plt.figure()
-                    plt.axis('off')
-                    plt.imshow((im[0, :, 0].reshape(64, 64) - yy[0, :, t].reshape(64, 64)).detach().cpu().numpy(),
-                               cmap='coolwarm')
-                    plt.colorbar()
-                    plt.clim(-2, 2)
-                    plt.savefig(
-                        os.path.join('./results/' + save_name + '/', "case_" + str(id) + "_error_" + str(20) + ".pdf"))
-                    plt.close()
-                test_l2_full += myloss(pred.reshape(bsz, -1), yy.reshape(bsz, -1)).item()
-            print(test_l2_full / ntest)
+                    if id < showcase:
+                        print(id)
+                        plt.figure()
+                        plt.axis('off')
+                        plt.imshow(out[0, :].reshape(85, 85).detach().cpu().numpy(), cmap='coolwarm')
+                        plt.colorbar()
+                        plt.savefig(
+                            os.path.join('./results/' + save_name + '/',
+                                         "case_" + str(id) + "_pred.pdf"))
+                        plt.close()
+                        # ============ #
+                        plt.figure()
+                        plt.axis('off')
+                        plt.imshow(y[0, :].reshape(85, 85).detach().cpu().numpy(), cmap='coolwarm')
+                        plt.colorbar()
+                        plt.savefig(
+                            os.path.join('./results/' + save_name + '/', "case_" + str(id) + "_gt.pdf"))
+                        plt.close()
+                        # ============ #
+                        plt.figure()
+                        plt.axis('off')
+                        plt.imshow((y[0, :] - out[0, :]).reshape(85, 85).detach().cpu().numpy(), cmap='coolwarm')
+                        plt.colorbar()
+                        plt.clim(-0.0005, 0.0005)
+                        plt.savefig(
+                            os.path.join('./results/' + save_name + '/', "case_" + str(id) + "_error.pdf"))
+                        plt.close()
+                        # ============ #
+                        plt.figure()
+                        plt.axis('off')
+                        plt.imshow((fx[0, :].unsqueeze(-1)).reshape(85, 85).detach().cpu().numpy(), cmap='coolwarm')
+                        plt.colorbar()
+                        plt.savefig(
+                            os.path.join('./results/' + save_name + '/', "case_" + str(id) + "_input.pdf"))
+                        plt.close()
+
+            rel_err /= ntest
+            print("rel_err:{}".format(rel_err))
     else:
         for ep in range(args.epochs):
-
             model.train()
-            train_l2_step = 0
-            train_l2_full = 0
-
-            for x, fx, yy in train_loader:
-                loss = 0
-                x, fx, yy = x.cuda(), fx.cuda(), yy.cuda()  # x: B,4096,2    fx: B,4096,T   y: B,4096,T
-                bsz = x.shape[0]
-
-                for t in range(0, T, step):
-                    y = yy[..., t:t + step]
-                    im = model(x, fx=fx)  # B , 4096 , 1
-                    loss += myloss(im.reshape(bsz, -1), y.reshape(bsz, -1))
-                    if t == 0:
-                        pred = im
-                    else:
-                        pred = torch.cat((pred, im), -1)
-                    fx = torch.cat((fx[..., step:], y), dim=-1)  # detach() & groundtruth
-
-                train_l2_step += loss.item()
-                train_l2_full += myloss(pred.reshape(bsz, -1), yy.reshape(bsz, -1)).item()
+            train_loss = 0
+            reg = 0
+            for x, fx, y in train_loader:
+                x, fx, y = x.cuda(), fx.cuda(), y.cuda()
                 optimizer.zero_grad()
+                out = model(x, fx=fx).squeeze(-1)  # B, N , 2, fx: B, N, y: B, N
+                out = y_normalizer.decode(out)
+                y = y_normalizer.decode(y)
+
+                l2loss = myloss(out, y)
+
+                loss = l2loss
                 loss.backward()
+
                 if args.max_grad_norm is not None:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
+                train_loss += l2loss.item()
                 scheduler.step()
 
-            test_l2_step = 0
-            test_l2_full = 0
+            train_loss /= ntrain
+            reg /= ntrain
+            print("Epoch {} Reg : {:.5f} Train loss : {:.5f}".format(ep, reg, train_loss))
 
             model.eval()
-
+            rel_err = 0.0
+            id = 0
             with torch.no_grad():
-                for x, fx, yy in test_loader:
-                    loss = 0
-                    x, fx, yy = x.cuda(), fx.cuda(), yy.cuda()  # x : B, 4096, 2  fx : B, 4096  y : B, 4096, T
-                    bsz = x.shape[0]
-                    for t in range(0, T, step):
-                        y = yy[..., t:t + step]
-                        im = model(x, fx=fx)
-                        loss += myloss(im.reshape(bsz, -1), y.reshape(bsz, -1))
-                        if t == 0:
-                            pred = im
-                        else:
-                            pred = torch.cat((pred, im), -1)
-                        fx = torch.cat((fx[..., step:], im), dim=-1)
+                for x, fx, y in test_loader:
+                    id += 1
+                    if id == 2:
+                        vis = True
+                    else:
+                        vis = False
+                    x, fx, y = x.cuda(), fx.cuda(), y.cuda()
+                    out = model(x, fx=fx).squeeze(-1)
+                    out = y_normalizer.decode(out)
+                    tl = myloss(out, y).item()
+                    rel_err += tl
 
-                    test_l2_step += loss.item()
-                    test_l2_full += myloss(pred.reshape(bsz, -1), yy.reshape(bsz, -1)).item()
-
-            print(
-                "Epoch {} , train_step_loss:{:.5f} , train_full_loss:{:.5f} , test_step_loss:{:.5f} , test_full_loss:{:.5f}".format(
-                    ep, train_l2_step / ntrain / (T / step), train_l2_full / ntrain, test_l2_step / ntest / (T / step),
-                        test_l2_full / ntest))
+            rel_err /= ntest
+            print("rel_err:{}".format(rel_err))
 
             if ep % 100 == 0:
                 if not os.path.exists('./checkpoints'):

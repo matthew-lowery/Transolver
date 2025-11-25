@@ -17,11 +17,13 @@ def set_seed(seed):
     torch.manual_seed(seed)
     np.random.seed(seed)
     torch.cuda.manual_seed(seed)
+    
+torch.backends.cudnn.deterministic = True
 
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--epochs', type=int, default=10_000)
 parser.add_argument('--weight_decay', type=float, default=1e-5)
-parser.add_argument('--model', type=str, default='Transolver_Structured_Mesh_2D')
+parser.add_argument('--model', type=str, default='Transolver_Irregular_Mesh')
 parser.add_argument('--n-hidden', type=int, default=64, help='hidden dim')
 parser.add_argument('--n-layers', type=int, default=8, help='layers')
 parser.add_argument('--n-heads', type=int, default=4)
@@ -36,12 +38,16 @@ parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
 parser.add_argument('--slice_num', type=int, default=32)
 parser.add_argument('--eval', type=int, default=0)
-parser.add_argument('--save_name', type=str, default='burg')
+parser.add_argument('--save_name', type=str, default='beij')
 parser.add_argument('--data_path', type=str, default='/data/fno')
+parser.add_argument('--shuf-seed', type=int, default=1)
 parser.add_argument('--seed', type=int, default=1)
 
+
 args = parser.parse_args()
+
 set_seed(args.seed)
+
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 train_path = args.data_path + '/piececonst_r421_N1024_smooth1.mat'
@@ -52,6 +58,13 @@ epochs = args.epochs
 eval = args.eval
 save_name = args.save_name
 
+def shuffle(x,y, seed=1):
+    np.random.seed(seed)
+    idx = np.arange(len(x))
+    np.random.shuffle(idx)
+    x = x[idx]
+    y = y[idx]
+    return x,y
 
 def count_parameters(model):
     total_params = 0
@@ -68,15 +81,25 @@ def main():
     s = h
     dx = 1.0 / s
 
-    fp = '../../kno_eqx/datasets/darcy_pwc.npz'
-    data = np.load(fp)
-    dataset = fp.split('/')[-1].split('.')[0]
-    x, x_grid, y, y_grid = data["x"], data["x_grid"], data["y"], data["y_grid"]
-    y = y.reshape(1200, -1)
-    x = torch.tensor(x, dtype=torch.float32); x_grid = torch.tensor(x_grid, dtype=torch.float32); y = torch.tensor(y, dtype=torch.float32)
-    print(x.shape)
-    x_train, x_test = x[:ntrain], x[-ntest:]
-    y_train, y_test = y[:ntrain], y[-ntest:]
+    ### load data
+    ndims, res_1d = 1, 168
+    ntrain,ntest = 5000, 1000
+    def get_beijing(seed=0, normalization=True):
+        Ntr, Nte = 5000, 1000
+        import pickle
+        with open('../../deep_gp_op/datasets/beijing_data.pickle', 'rb') as handle:
+            d = pickle.load(handle)
+        X, Y = d["x"][:Ntr+Nte], d["y"][:Ntr+Nte]
+        X,Y=shuffle(X,Y,seed=args.shuf_seed)
+        X = torch.tensor(X, dtype=torch.float32); Y = torch.tensor(Y, dtype=torch.float32)
+        Xtr, Xte = X[:Ntr], X[Ntr:]
+        Ytr, Yte = Y[:Ntr], Y[Ntr:]
+        return Xtr, Xte,Ytr,Yte
+
+    x_train,x_test,y_train,y_test = get_beijing()
+    y_train, y_test = y_train.squeeze(), y_test.squeeze()
+    x_grid = np.linspace(0,1,x_train.shape[1])[:,None]
+    x_grid = torch.tensor(x_grid, dtype=torch.float32)
 
     x_normalizer = UnitTransformer(x_train)
     y_normalizer = UnitTransformer(y_train)
@@ -98,19 +121,19 @@ def main():
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_test, x_test, y_test),
                                               batch_size=args.batch_size, shuffle=False)
 
-    model = get_model(args).Model(space_dim=2,
+    model = get_model(args).Model(space_dim=1,
                                   n_layers=args.n_layers,
                                   n_hidden=args.n_hidden,
                                   dropout=args.dropout,
                                   n_head=args.n_heads,
                                   Time_Input=False,
                                   mlp_ratio=args.mlp_ratio,
-                                  fun_dim=1,
+                                  fun_dim=5,
                                   out_dim=1,
                                   slice_num=args.slice_num,
                                   ref=args.ref,
                                   unified_pos=args.unified_pos,
-                                  H=29, W=29).cuda()
+                                  ).cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 

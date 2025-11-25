@@ -11,17 +11,17 @@ from model_dict import get_model
 from utils.normalizer import UnitTransformer
 import matplotlib.pyplot as plt
 
-parser = argparse.ArgumentParser('Training Transolver')
-
 def set_seed(seed):    
     torch.manual_seed(seed)
     np.random.seed(seed)
     torch.cuda.manual_seed(seed)
 
+parser = argparse.ArgumentParser('Training Transolver')
+
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--epochs', type=int, default=10_000)
 parser.add_argument('--weight_decay', type=float, default=1e-5)
-parser.add_argument('--model', type=str, default='Transolver_Structured_Mesh_2D')
+parser.add_argument('--model', type=str, default='Transolver_Irregular_Mesh')
 parser.add_argument('--n-hidden', type=int, default=64, help='hidden dim')
 parser.add_argument('--n-layers', type=int, default=8, help='layers')
 parser.add_argument('--n-heads', type=int, default=4)
@@ -68,13 +68,13 @@ def main():
     s = h
     dx = 1.0 / s
 
-    fp = '../../kno_eqx/datasets/darcy_pwc.npz'
+    fp = '../../kno_eqx/datasets/burgers.npz'
     data = np.load(fp)
     dataset = fp.split('/')[-1].split('.')[0]
     x, x_grid, y, y_grid = data["x"], data["x_grid"], data["y"], data["y_grid"]
     y = y.reshape(1200, -1)
     x = torch.tensor(x, dtype=torch.float32); x_grid = torch.tensor(x_grid, dtype=torch.float32); y = torch.tensor(y, dtype=torch.float32)
-    print(x.shape)
+
     x_train, x_test = x[:ntrain], x[-ntest:]
     y_train, y_test = y[:ntrain], y[-ntest:]
 
@@ -98,7 +98,7 @@ def main():
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_test, x_test, y_test),
                                               batch_size=args.batch_size, shuffle=False)
 
-    model = get_model(args).Model(space_dim=2,
+    model = get_model(args).Model(space_dim=1,
                                   n_layers=args.n_layers,
                                   n_hidden=args.n_hidden,
                                   dropout=args.dropout,
@@ -110,7 +110,7 @@ def main():
                                   slice_num=args.slice_num,
                                   ref=args.ref,
                                   unified_pos=args.unified_pos,
-                                  H=29, W=29).cuda()
+                                  ).cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
