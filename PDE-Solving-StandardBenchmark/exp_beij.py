@@ -95,7 +95,7 @@ def main():
         with open('../../deep_gp_op/datasets/beijing_data.pickle', 'rb') as handle:
             d = pickle.load(handle)
         X, Y = d["x"][:Ntr+Nte], d["y"][:Ntr+Nte]
-        X,Y=shuffle(X,Y,seed=args.shuf_seed)
+        X,Y=shuffle(X,Y,seed=args.seed)
         X = torch.tensor(X, dtype=torch.float32); Y = torch.tensor(Y, dtype=torch.float32)
         Xtr, Xte = X[:Ntr], X[Ntr:]
         Ytr, Yte = Y[:Ntr], Y[Ntr:]
