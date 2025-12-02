@@ -13,6 +13,13 @@ import matplotlib.pyplot as plt
 import wandb
 parser = argparse.ArgumentParser('Training Transolver')
 
+def shuffle(x,y, seed=1):
+    np.random.seed(seed)
+    idx = np.arange(len(x))
+    np.random.shuffle(idx)
+    x = x[idx]
+    y = y[idx]
+    return x,y
 
 def set_seed(seed):    
     torch.manual_seed(seed)
@@ -50,8 +57,6 @@ wandb.config.update(args)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-train_path = args.data_path + '/piececonst_r421_N1024_smooth1.mat'
-test_path = args.data_path + '/piececonst_r421_N1024_smooth2.mat'
 ntrain = 90
 ntest = 10
 epochs = args.epochs
@@ -74,14 +79,15 @@ def main():
     s = h
     dx = 1.0 / s
 
-    fp = '../../deep_gp_op/datasets/ns_pdebench_pres_t0_t1_mach_1.0.npz'
+    # fp = '../../deep_gp_op/datasets/ns_pdebench_pres_t0_t1_mach_1.0.npz'
+    fp = '/projects/bfel/mlowery/ns_3d.npz'
     data = np.load(fp)
     dataset = fp.split('/')[-1].split('.')[0]
     x, x_grid, y= data["x"], data["x_grid"], data["y"]
     
     x = x[:,::2,::2,::2].reshape(ntrain + ntest,-1,1)
     y = y[:,::2,::2,::2].reshape(ntrain + ntest,-1)
-
+    x,y = shuffle(x,y)
     x_grid = data['x_grid']
     x_grid = np.asarray(np.meshgrid(x_grid, x_grid, x_grid)).transpose(1,2,3,0)
     x_grid = x_grid[::2,::2,::2].reshape(-1,3)
