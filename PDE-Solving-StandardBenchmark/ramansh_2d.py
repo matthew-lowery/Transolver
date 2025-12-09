@@ -21,7 +21,7 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
 
 parser.add_argument('--lr', type=float, default=1e-3)
-parser.add_argument('--epochs', type=int, default=10000)
+parser.add_argument('--epochs', type=int, default=500)
 parser.add_argument('--weight_decay', type=float, default=1e-5)
 parser.add_argument('--model', type=str, default='Transolver_Irregular_Mesh')
 parser.add_argument('--n-hidden', type=int, default=32, help='hidden dim')
