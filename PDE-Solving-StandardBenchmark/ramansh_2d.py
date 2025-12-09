@@ -24,7 +24,7 @@ parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--epochs', type=int, default=10000)
 parser.add_argument('--weight_decay', type=float, default=1e-5)
 parser.add_argument('--model', type=str, default='Transolver_Irregular_Mesh')
-parser.add_argument('--n-hidden', type=int, default=128, help='hidden dim')
+parser.add_argument('--n-hidden', type=int, default=32, help='hidden dim')
 parser.add_argument('--n-layers', type=int, default=4, help='layers')
 parser.add_argument('--n-heads', type=int, default=4)
 parser.add_argument('--batch-size', type=int, default=20)
@@ -36,7 +36,7 @@ parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
-parser.add_argument('--slice_num', type=int, default=32)
+parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--wandb', action='store_true')
@@ -51,10 +51,10 @@ parser.add_argument('--dataset', type=str, default='backward_facing_step', choic
                                                                                     'flow_cylinder_shedding', 
                                                                                     'lid_cavity_flow', 
                                                                                     'merge_vortices', 
-                                                                                    'taylor_green_exact', 
-                                                                                    'taylor_green_numerical',
+                                                                                    'merge_vortices_easier', 
+                                                                                    'taylor_green_exact',
                                                                                     "merge_vortices_easier",
-                                                                                    "backward_facing_step_ood"
+                                                                                    'backward_facing_step_ood'
                                                                                     ])
 
 args = parser.parse_args()
@@ -86,8 +86,8 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    # data = np.load(f'/projects/bfel/mlowery/geo-fno/{args.dataset}.npz')
-    data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
+    data = np.load(f'/projects/bfel/mlowery/geo-fno/{args.dataset}.npz')
+    # data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
 
     x_grid = data['x_grid']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
