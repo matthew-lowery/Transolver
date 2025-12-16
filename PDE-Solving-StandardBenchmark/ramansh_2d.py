@@ -86,8 +86,8 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
-    # data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
+    # data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
 
     x_grid = data['x_grid']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
@@ -169,7 +169,6 @@ def main():
             y = y_normalizer.decode(y)
 
             l2loss = myloss(out, y)
-
             loss = l2loss
             loss.backward()
 
@@ -192,6 +191,8 @@ def main():
             x, fx, y = x.cuda(), fx.cuda(), y.cuda()
             out = model(x, fx=fx).squeeze(-1)
             out = y_normalizer.decode(out)
+            out = torch.linalg.norm(out, dim=-1)
+            y = torch.linalg.norm(y, dim=-1)
             tl = myloss(out, y).item()
             rel_err += tl
     rel_err /= ntest
