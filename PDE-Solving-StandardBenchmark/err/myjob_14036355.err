@@ -1,0 +1,14 @@
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/requests/__init__.py:86: RequestsDependencyWarning: Unable to find acceptable character detection dependency (chardet or charset_normalizer).
+  warnings.warn(
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+wandb: Appending key for api.wandb.ai to your netrc file: /u/mlowery/.netrc
+wandb: Currently logged in as: mattlowery10 (certann) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: creating run
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /u/mlowery/Transolver/PDE-Solving-StandardBenchmark/wandb/run-20251209_162136-0qpbhvo0
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run efficient-cosmos-2
+wandb: ⭐️ View project at https://wandb.ai/certann/transolver_ram
+wandb: 🚀 View run at https://wandb.ai/certann/transolver_ram/runs/0qpbhvo0
+wandb: 409 encountered ({"errors":[{"message":"project may already be created, please retry","path":["upsertBucket"]}],"data":{"upsertBucket":null}}), retrying request

@@ -1,0 +1,17 @@
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/requests/__init__.py:86: RequestsDependencyWarning: Unable to find acceptable character detection dependency (chardet or charset_normalizer).
+  warnings.warn(
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Traceback (most recent call last):
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/ramansh_2d.py", line 228, in <module>
+    main()
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/ramansh_2d.py", line 118, in main
+    x_normalizer.cuda()
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/utils/normalizer.py", line 41, in cuda
+    self.mean = self.mean.cuda()
+torch.AcceleratorError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+Search for `cudaErrorDevicesUnavailable' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

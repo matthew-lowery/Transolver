@@ -26,11 +26,13 @@ cd /u/mlowery/Transolver/PDE-Solving-StandardBenchmark/
 $pycmd
 EOF
 }
-
-for seed in 1 2 3 4; do
-sp "exp_burg.py --seed=$seed"
-sp "exp_darcy.py --seed=$seed"
-sp "exp_beij.py --seed=$seed"
-sp "exp_diffr.py --seed=$seed"
-sp "exp_ns.py --seed=$seed"
+#
+#for seed in 1 2 3; do
+#for nh in 64; do
+#sp "python3 exp_ns.py --epochs=500 --slice_num=32 --n-heads=8 --n-hidden=$nh --n-layers=8 --seed=$seed"
+#done
+#done
+#
+for seed in 1 2 3; do
+sp "python3 exp_beij.py --slice_num=32 --n-heads=8 --n-hidden=256 --n-layers=8 --seed=$seed" 10
 done

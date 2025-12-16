@@ -1,0 +1,38 @@
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/requests/__init__.py:86: RequestsDependencyWarning: Unable to find acceptable character detection dependency (chardet or charset_normalizer).
+  warnings.warn(
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+wandb: Appending key for api.wandb.ai to your netrc file: /u/mlowery/.netrc
+wandb: Currently logged in as: mattlowery10 (certann) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.0
+wandb: Run data is saved locally in /u/mlowery/Transolver/PDE-Solving-StandardBenchmark/wandb/run-20251213_175054-8kxyqz0c
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run vague-dust-24
+wandb: ⭐️ View project at https://wandb.ai/certann/ramansh_transolver2
+wandb: 🚀 View run at https://wandb.ai/certann/ramansh_transolver2/runs/8kxyqz0c
+Traceback (most recent call last):
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/ramansh_2d.py", line 229, in <module>
+    main()
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/ramansh_2d.py", line 119, in main
+    x_normalizer.cuda()
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/utils/normalizer.py", line 41, in cuda
+    self.mean = self.mean.cuda()
+torch.AcceleratorError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+Search for `cudaErrorDevicesUnavailable' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/ramansh_2d.py", line 229, in <module>
+    main()
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/ramansh_2d.py", line 119, in main
+    x_normalizer.cuda()
+  File "/u/mlowery/Transolver/PDE-Solving-StandardBenchmark/utils/normalizer.py", line 41, in cuda
+    self.mean = self.mean.cuda()
+torch.AcceleratorError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+Search for `cudaErrorDevicesUnavailable' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

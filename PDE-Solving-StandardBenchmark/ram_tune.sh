@@ -11,7 +11,7 @@ sp() {
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=gpuA100x4,gpuA100x8
+#SBATCH --partition=gpuA100x4
 #SBATCH --account=bfel-delta-gpu
 #SBATCH --job-name=myjob
 #SBATCH --time=15:00:00
@@ -27,26 +27,14 @@ $pycmd
 EOF
 }
 
-for dataset in 'backward_facing_step' 'buoyancy_cavity_flow' 'flow_cylinder_laminar' 'flow_cylinder_shedding' 'lid_cavity_flow' 'merge_vortices' 'taylor_green_exact' 'merge_vortices_easier'; do
-for nh in 32 64 128; do
-sp "python3 ramansh_2d.py --dataset=$dataset --n-hidden=$nh"
-done
-done
-
-for dataset in 'backward_facing_step' 'buoyancy_cavity_flow' 'flow_cylinder_laminar' 'flow_cylinder_shedding' 'lid_cavity_flow' 'merge_vortices' 'taylor_green_exact' 'merge_vortices_easier'; do
-for nl in 3 5; do
-sp "python3 ramansh_2d.py --dataset=$dataset --n-layers=$nl"
-done
-done
-
-for dataset in 'backward_facing_step' 'buoyancy_cavity_flow' 'flow_cylinder_laminar' 'flow_cylinder_shedding' 'lid_cavity_flow' 'merge_vortices' 'taylor_green_exact' 'merge_vortices_easier'; do
-for nh in 8; do
-sp "python3 ramansh_2d.py --dataset=$dataset --n-heads=$nh"
-done
+for seed in 1 2 3; do
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='flow_cylinder_shedding' --n-heads=4 --n-layers=5 --n-hidden=128 --slice-num=32 --ntrain=10000"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='backward_facing_step' --slice-num=16 --n-hidden=128 --n-layers=5 --n-heads=8 --ntrain=500"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='backward_facing_step_ood' --slice-num=16 --n-hidden=128 --n-layers=5 --n-heads=8 --ntrain=500"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='buoyancy_cavity_flow' --slice-num=32 --n-hidden=128 --n-layers=5 --n-heads=4 --ntrain=10000"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='lid_cavity_flow' --slice-num=16 --n-hidden=128 --n-layers=5 --n-heads=4 --ntrain=10000"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='taylor_green_exact' --slice-num=64 --n-hidden=128 --n-layers=5 --n-heads=4 --ntrain=5000"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='merge_vortices_easier' --slice-num=64 --n-hidden=128 --n-layers=5 --n-heads=8 --ntrain=500"
+sp "python3 ramansh_2d.py --calc-div --norm-grid --save --seed=$seed --wandb --dataset='flow_cylinder_laminar' --slice-num=32 --n-hidden=128 --n-layers=5 --n-heads=8 --ntrain=100"
 done
 
-for dataset in 'backward_facing_step' 'buoyancy_cavity_flow' 'flow_cylinder_laminar' 'flow_cylinder_shedding' 'lid_cavity_flow' 'merge_vortices' 'taylor_green_exact' 'merge_vortices_easier'; do
-for sn in 32 64; do
-sp "python3 ramansh_2d.py --dataset=$dataset --slice-num=$sn"
-done
-done

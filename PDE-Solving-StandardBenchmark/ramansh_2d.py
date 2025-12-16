@@ -12,7 +12,7 @@ from utils.normalizer import UnitTransformer
 import matplotlib.pyplot as plt
 import time
 import wandb
-
+import scipy
 parser = argparse.ArgumentParser('Training Transolver')
 
 def set_seed(seed):    
@@ -36,6 +36,7 @@ parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
+parser.add_argument('--project-name', type=str, default='ramansh_transolver3')
 parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
@@ -44,6 +45,7 @@ parser.add_argument('--save', action='store_true')
 parser.add_argument('--norm-grid', action='store_true')
 parser.add_argument('--calc-div', action='store_true')
 parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
+parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno-new')
 parser.add_argument('--model-folder', type=str, default='/projects/bfel/mlowery/transolver_models')
 parser.add_argument('--dataset', type=str, default='backward_facing_step', choices=['backward_facing_step', 
                                                                                     'buoyancy_cavity_flow', 
@@ -64,15 +66,13 @@ name = f"{args.dataset}_{args.seed}_{args.ntrain}_all" ## all as in no subsample
 if not args.wandb:
     os.environ["WANDB_MODE"] = "disabled"
 wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
-wandb.init(project='transolver_ram', name=f'{name}')
+wandb.init(project=args.project_name)
 wandb.config.update(args)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 ntrain = args.ntrain
-ntest = 200
 epochs = args.epochs
-
 
 
 def count_parameters(model):
@@ -86,7 +86,7 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    data = np.load(f'/projects/bfel/mlowery/geo-fno/{args.dataset}.npz')
+    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
     # data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
 
     x_grid = data['x_grid']
@@ -94,6 +94,7 @@ def main():
     if x_train.ndim == 2: x_train = x_train[...,None]
     if x_test.ndim == 2: x_test = x_test[...,None]
 
+    ntest = len(x_test)
     x_train, y_train = x_train[:ntrain], y_train[:ntrain]
 
     ### norm rect domain to [0,1]^2
@@ -180,7 +181,7 @@ def main():
 
         train_loss /= ntrain
         print("Epoch {} Train loss : {:.5f}".format(ep, train_loss))
-        wandb.log({'train_loss': train_loss})
+        wandb.log({'train_loss': train_loss}, step=ep)
     train_t2 = time.perf_counter()
        
     rel_err = 0.0
@@ -196,8 +197,8 @@ def main():
     rel_err /= ntest
     print("rel_err:{}".format(rel_err))
     eval_t2 = time.perf_counter()
-    wandb.log({"test_loss": rel_err, 'eval_time:': eval_t2-eval_t1, 'train_time': train_t2 - train_t1}, step=ep)
-
+    print('eval_time: ', eval_t2-eval_t1, 'train_time: ', train_t2-train_t1)
+    wandb.log({"test_loss": rel_err, 'eval_time:': eval_t2-eval_t1, 'train_time': train_t2 - train_t1}, step=ep, commit=True)
     if args.calc_div:
         y_preds_test = []
         with torch.no_grad():

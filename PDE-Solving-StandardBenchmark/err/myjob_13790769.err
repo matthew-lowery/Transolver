@@ -1,0 +1,16 @@
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/requests/__init__.py:86: RequestsDependencyWarning: Unable to find acceptable character detection dependency (chardet or charset_normalizer).
+  warnings.warn(
+/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+usage: Training Transolver [-h] [--lr LR] [--epochs EPOCHS]
+                           [--weight_decay WEIGHT_DECAY] [--model MODEL]
+                           [--n-hidden N_HIDDEN] [--n-layers N_LAYERS]
+                           [--n-heads N_HEADS] [--batch-size BATCH_SIZE]
+                           [--gpu GPU] [--max_grad_norm MAX_GRAD_NORM]
+                           [--downsample DOWNSAMPLE] [--mlp_ratio MLP_RATIO]
+                           [--dropout DROPOUT] [--ntrain NTRAIN]
+                           [--unified_pos UNIFIED_POS] [--ref REF]
+                           [--slice_num SLICE_NUM] [--eval EVAL]
+                           [--save_name SAVE_NAME] [--data_path DATA_PATH]
+                           [--shuf-seed SHUF_SEED] [--seed SEED]
+Training Transolver: error: unrecognized arguments: --num_slices=64
