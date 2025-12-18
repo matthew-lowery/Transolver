@@ -78,12 +78,11 @@ def main():
     ########## load data ########################################################################
     # data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
     # data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
-    # data = np.load('/home/matt/ram_dataset/transolver_species_transport.npz')
-    data = np.load('/projects/bfel/mlowery/transolver_species_transport.npz')
-    x_grid = data['x_grid']
+    data = np.load('/home/matt/ram_dataset/transolver_species_transport.npz')
+    # data = np.load('/projects/bfel/mlowery/transolver_species_transport.npz')
+    x_grid = data['x_grid']; y_idx = data['y_idx']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
     print(x_grid.shape, x_train.shape, x_test.shape, y_train.shape, y_test.shape) #(10000, 1388) (200, 1388) (10000, 7000, 3) (200, 7000, 3)
-    from scipy.io import loadmat
 
     
     if x_train.ndim == 2: x_train = x_train[...,None]
@@ -162,7 +161,7 @@ def main():
             x, fx, y = x.cuda(), fx.cuda(), y.cuda()
             optimizer.zero_grad()
             out = model(x, fx=fx).squeeze(-1)  # B, N , 2, fx: B, N, y: B, N
-            out = y_normalizer.decode(out)
+            out = y_normalizer.decode(out[:, y_idx])
             y = y_normalizer.decode(y)
 
             l2loss = myloss(out, y)
@@ -187,7 +186,7 @@ def main():
         for x, fx, y in test_loader:
             x, fx, y = x.cuda(), fx.cuda(), y.cuda()
             out = model(x, fx=fx).squeeze(-1)
-            out = y_normalizer.decode(out)
+            out = y_normalizer.decode(out[:, y_idx])
             out = torch.linalg.norm(out, dim=-1)
             y = torch.linalg.norm(y, dim=-1)
             tl = myloss(out, y).item()
@@ -203,7 +202,7 @@ def main():
             for x, fx, y in test_loader:
                 x, fx, y = x.cuda(), fx.cuda(), y.cuda()
                 out = model(x, fx=fx).squeeze(-1)
-                out = y_normalizer.decode(out)
+                out = y_normalizer.decode(out[:, y_idx])
                 y_preds_test.append(out)
                 # tl = myloss(out, y).item()
                 rel_err += tl
