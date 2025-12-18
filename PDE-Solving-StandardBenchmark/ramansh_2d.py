@@ -36,7 +36,7 @@ parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
-parser.add_argument('--project-name', type=str, default='ramansh_transolver3')
+parser.add_argument('--project-name', type=str, default='ramansh_transolver4')
 parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
@@ -86,8 +86,8 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    # data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
-    data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
+    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    #data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
 
     x_grid = data['x_grid']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']

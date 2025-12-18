@@ -36,7 +36,7 @@ parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
-parser.add_argument('--project-name', type=str, default='ramansh_transolver3')
+parser.add_argument('--project-name', type=str, default='ramansh_transolv_airfoi')
 parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
@@ -77,11 +77,12 @@ def count_parameters(model):
 ''' ok so here the problem is from 2k 2d points to a 3d function at 500 different points. Transolver can only predict on the input 2k mesh grid, so we just take the first 500 points of the output'''
 def main():
     ########## load data ########################################################################
-    # data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
-    data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
+    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
     print(data.keys())
     x_grid = data['x_grid']; y = data['y']
     print(y.shape)
+    ntest = 200
     y_train = y[:args.ntrain]; y_test = y[-200:]
     x_grid_train = x_grid[:args.ntrain]; x_grid_test = x_grid[-200:]
 

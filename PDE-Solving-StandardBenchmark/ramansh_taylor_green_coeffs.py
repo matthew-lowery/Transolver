@@ -76,8 +76,8 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    # data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
-    data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
+    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
 
     x_grid = data['x_grid']; y_grid = data['y_grid']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']

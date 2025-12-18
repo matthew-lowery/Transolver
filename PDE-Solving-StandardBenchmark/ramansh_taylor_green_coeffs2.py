@@ -47,7 +47,7 @@ parser.add_argument('--calc-div', action='store_true')
 parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
 parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno-new')
 parser.add_argument('--model-folder', type=str, default='/projects/bfel/mlowery/transolver_models')
-parser.add_argument('--dataset', type=str, default='taylor_green_time_coeffs')
+parser.add_argument('--dataset', type=str, default='taylor_green_coeffs')
 
 args = parser.parse_args()
 set_seed(args.seed)
@@ -79,15 +79,15 @@ def main():
     data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
     #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
 
-    x_grid = data['x_grid']; y_grid = data['y_grid'] # (2, 3) (2000, 3) (10000, 2000, 2) (200, 2000, 2) (200, 2) (10000, 2)
+    x_grid = data['x_grid']; y_grid = data['y_grid']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
     if x_train.ndim == 2: x_train = x_train[...,None]
     if x_test.ndim == 2: x_test = x_test[...,None]
-    
+
     ntest = len(x_test)
     x_train, y_train = x_train[:ntrain], y_train[:ntrain]
 
-    ### norm rect domain to [0,1]^3
+    ### norm rect domain to [0,1]^2
     if args.norm_grid:
         y_grid_min, y_grid_max = np.min(y_grid, axis=0, keepdims=True), np.max(y_grid, axis=0, keepdims=True)
         y_grid = (y_grid- y_grid_min) / (y_grid_max - y_grid_min)
@@ -103,13 +103,12 @@ def main():
     y_normalizer = UnitTransformer(y_train)
 
     #### In this problem, we just assume the coefficents are function values on the output function's grid, which seems reasonable
+    ## just assume coefs are constant functions on the output function's grid!
     x_train = x_normalizer.encode(x_train)
     x_test = x_normalizer.encode(x_test)
-    pad = torch.zeros((x_train.shape[0], 1998, x_train.shape[-1]))
-    x_train = torch.cat((x_train, pad), dim=1)
 
-    pad = torch.zeros((x_test.shape[0], 1998, x_test.shape[-1]))
-    x_test = torch.cat((x_test, pad), dim=1) # (200, 2,1 ) (10000, 2,1 ) --> 200,2000,1, 10k,2000,1
+    x_train = torch.repeat_interleave(x_train[:,None], len(y_grid), dim=1).squeeze()
+    x_test = torch.repeat_interleave(x_test[:,None], len(y_grid), dim=1).squeeze()
     y_train = y_normalizer.encode(y_train)
 
     x_normalizer.cuda()
@@ -127,7 +126,7 @@ def main():
     in_channels = x_train.shape[-1]
     out_channels = y_train.shape[-1]
 
-    model = get_model(args).Model(space_dim=3,
+    model = get_model(args).Model(space_dim=2,
                                   n_layers=args.n_layers,
                                   n_hidden=args.n_hidden,
                                   dropout=args.dropout,

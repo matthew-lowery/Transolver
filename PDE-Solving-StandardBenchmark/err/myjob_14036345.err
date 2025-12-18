@@ -1,5 +1,0 @@
-/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/requests/__init__.py:86: RequestsDependencyWarning: Unable to find acceptable character detection dependency (chardet or charset_normalizer).
-  warnings.warn(
-/u/mlowery/.conda/envs/gnot/lib/python3.10/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
-  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
-slurmstepd: error: *** JOB 14036345 ON gpua031 CANCELLED AT 2025-12-09T16:20:45 ***

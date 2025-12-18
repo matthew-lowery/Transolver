@@ -105,11 +105,8 @@ def main():
     #### In this problem, we just assume the coefficents are function values on the output function's grid, which seems reasonable
     x_train = x_normalizer.encode(x_train)
     x_test = x_normalizer.encode(x_test)
-    pad = torch.zeros((x_train.shape[0], 1998, x_train.shape[-1]))
-    x_train = torch.cat((x_train, pad), dim=1)
-
-    pad = torch.zeros((x_test.shape[0], 1998, x_test.shape[-1]))
-    x_test = torch.cat((x_test, pad), dim=1) # (200, 2,1 ) (10000, 2,1 ) --> 200,2000,1, 10k,2000,1
+    x_train = torch.repeat_interleave(x_train[:,None], len(y_grid), dim=1).squeeze()
+    x_test = torch.repeat_interleave(x_test[:,None], len(y_grid), dim=1).squeeze()
     y_train = y_normalizer.encode(y_train)
 
     x_normalizer.cuda()
