@@ -6,7 +6,6 @@ import torch
 import torch.nn.functional as F
 from tqdm import *
 from utils.testloss import TestLoss
-from einops import rearrange
 from model_dict import get_model
 from utils.normalizer import UnitTransformer
 import matplotlib.pyplot as plt
@@ -80,8 +79,11 @@ def main():
     data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
     #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
     print(data.keys())
-    x_grid = data['x_grid']; y = data['y']
-    print(y.shape)
+    x_grid = data['x_grid']; y = data['y'] ### ntrain, 2k, 2; ntrain, 500, 3
+    pad = np.zeros((x_grid.shape[0], x_grid.shape[1], 1))
+    x_grid = np.concatenate((x_grid, pad), axis=-1)
+    x_grid = np.concatenate((x_grid, np.repeat(y_grid[None], len(x_grid), axis=0)), axis=1) ### ntrain, 2500, 3
+    
     ntest = 200
     y_train = y[:args.ntrain]; y_test = y[-200:]
     x_grid_train = x_grid[:args.ntrain]; x_grid_test = x_grid[-200:]
@@ -156,7 +158,7 @@ def main():
             x, y = x.cuda(), y.cuda()
             optimizer.zero_grad()
             out = model(x, fx=None).squeeze(-1)  # B, N , 2, fx: B, N, y: B, N
-            out = out[:, :500]
+            out = out[:, -500:]
             out = y_normalizer.decode(out)
             y = y_normalizer.decode(y)
             l2loss = myloss(out, y)
@@ -182,7 +184,7 @@ def main():
         for x, y in test_loader:
             x, y = x.cuda(), y.cuda()
             out = model(x, fx=None).squeeze(-1)
-            out = out[:, :500]
+            out = out[:, -500:]
             out = y_normalizer.decode(out)
             tl = myloss(out, y).item()
             rel_err += tl
@@ -197,7 +199,7 @@ def main():
             for x, y in test_loader:
                 x, y = x.cuda(), y.cuda()
                 out = model(x, fx=None).squeeze(-1)
-                out = out[:, :500]
+                out = out[:, -500:]
                 out = y_normalizer.decode(out)
                 y_preds_test.append(out)
                 # tl = myloss(out, y).item()
