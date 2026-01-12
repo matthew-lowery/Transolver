@@ -54,7 +54,7 @@ parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_
 parser.add_argument('--npoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
 parser.add_argument('--val', action='store_true')
 parser.add_argument('--problem', type=str, choices=['nlpoisson', 'poisson', 'ADRSHEAR'], default='nlpoisson')
-parser.add_argument('--surf', type=str, choices=['sphere, torus'], default='torus')
+parser.add_argument('--surf', type=str, choices=['sphere', 'torus'], default='torus')
 args = parser.parse_args()
 set_seed(args.seed)
 
