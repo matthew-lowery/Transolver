@@ -1,7 +1,6 @@
 import os
 import argparse
 import numpy as np
-import scipy.io as scio
 import torch
 import torch.nn.functional as F
 from tqdm import *
@@ -12,7 +11,8 @@ from utils.normalizer import UnitTransformer
 import matplotlib.pyplot as plt
 import time
 import wandb
-import scipy
+from scipy.io import loadmat
+
 parser = argparse.ArgumentParser('Training Transolver')
 
 def shuffle(x,y, seed=1):
@@ -53,16 +53,10 @@ parser.add_argument('--norm-grid', action='store_true')
 parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_datasets')
 parser.add_argument('--npoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
 parser.add_argument('--val', action='store_true')
-
+parser.add_argument('--problem', type=str, choices=['nlpoisson', 'poisson', 'ADRSHEAR'], default='nlpoisson')
+parser.add_argument('--surf', type=str, choices=['sphere, torus'], default='torus')
 args = parser.parse_args()
 set_seed(args.seed)
-
-name = f"{args.dataset}_{args.seed}_{args.ntrain}_all" ## all as in no subsample nymore 
-if not args.wandb:
-    os.environ["WANDB_MODE"] = "disabled"
-wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
-wandb.init(project=args.project_name)
-wandb.config.update(args)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
@@ -86,7 +80,7 @@ def main():
     if not args.wandb:
         os.environ["WANDB_MODE"] = "disabled"
     wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
-    wandb.init(project='nmanifold', name=f'{args.problem}_{args.ntrain}_{args.npoints}')
+    wandb.init(project=args.project_name, name=f'{args.problem}_{args.ntrain}_{args.npoints}')
     wandb.config.update(args)
 
     if args.problem != 'ADRSHEAR':
@@ -113,7 +107,7 @@ def main():
            x_test = x[-ntest*2:ntest]
            y_test = y[-ntest*2:ntest]
         x_grid = data['x']
-
+    print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}, {x_grid.shape=}')
     if args.norm_grid:
         x_grid_min, x_grid_max = np.min(x_grid, axis=0, keepdims=True), np.max(x_grid, axis=0, keepdims=True)
         x_grid = (x_grid- x_grid_min) / (x_grid_max - x_grid_min)
@@ -139,13 +133,12 @@ def main():
     pos_train = pos.repeat(ntrain, 1, 1)
     pos_test = pos.repeat(ntest, 1, 1)
     print("Dataloading is over.")
-
     train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_train, x_train, y_train),
                                                batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_test, x_test, y_test),
                                               batch_size=args.batch_size, shuffle=False)
     in_channels = x_train.shape[-1]
-    out_channels = y_train.shape[-1]
+    out_channels = 1
 
     model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,
