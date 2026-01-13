@@ -56,7 +56,6 @@ parser.add_argument('--val', action='store_true')
 parser.add_argument('--problem', type=str, default='rd', choices=['nlp', 'poisson', 'rd'])
 parser.add_argument('--k-train', type=int, default=2) ### max is 12
 parser.add_argument('--k-test', type=int, default=5)
-
 args = parser.parse_args()
 set_seed(args.seed)
 
@@ -92,20 +91,26 @@ def main():
 
     manifold_coords = data['t'][0]
 
-    key,_ = jr.split(key)
-    perm = jr.permutation(key, len(manifold_coords))
+    np.random.seed(0)
+    perm = np.random.permutation(manifold_coords).astype(np.int32)
     train_manifold_idx = perm[:args.k_train]; test_manifold_idx = perm[-args.k_test:]
+    assert args.k_test*2 + args.k_train <= len(manifold_coords) # this needs to hold for the validation set up
+    if args.val: test_manifold_idx = perm[-args.k_test*2:-args.k_test]
+
 
     F_train = F_train[train_manifold_idx]
+    N_each_k_train = F_train.shape[1]
+    N_each_k_test = F_test.shape[1]
     mc = manifold_coords[train_manifold_idx] 
     mc = np.broadcast_to(mc[:,None,None], F_train.shape)
     F_train = np.concatenate((F_train[...,None], mc[...,None]), axis=-1) # k,N,n,2
-
+    F_train = F_train.reshape(-1, x_grid.shape[1], 2)
     F_test = F_test[test_manifold_idx] # k,N,n
     mc = manifold_coords[test_manifold_idx] 
     mc = np.broadcast_to(mc[:,None,None], F_test.shape)
     F_test = np.concatenate((F_test[...,None], mc[...,None]), axis=-1) # k,N,n,2
 
+    F_test = F_test.reshape(-1, x_grid.shape[1], 2)
     U_train = U_train[train_manifold_idx]; U_test = U_test[test_manifold_idx]
     U_train = U_train.reshape(-1, U_train.shape[-1])
     U_test = U_test.reshape(-1, U_test.shape[-1])
@@ -114,23 +119,20 @@ def main():
     ### don't have manifold coords unforch, crap
     x_train, x_test = F_train, F_test ## shuffle these?
     y_train, y_test = U_train, U_test
-
-    key,_ = jr.split(key)
-    perm = jr.permutation(key, len(x_train))
-    x_train = x_train[perm]; y_train = y_train[perm]
+    
     ntrain = len(x_train)
-
-    print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}')
+    ntest = len(x_test)
 
     n_samples = x_train.shape[1]
 
-    x_grid_train = np.repeat(x_grid[train_manifold_idx,None], ntrain, axis=1)
+    x_grid_train = np.repeat(x_grid[train_manifold_idx,None], N_each_k_train, axis=1)
     x_grid_train = x_grid_train.reshape(-1,x_grid.shape[1], 3)
 
-    x_grid_test = np.repeat(x_grid[test_manifold_idx,None], ntest, axis=1)
+    x_grid_test = np.repeat(x_grid[test_manifold_idx,None], N_each_k_test, axis=1)
     x_grid_test = x_grid_test.reshape(-1,x_grid.shape[1], 3)
 
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}')
+    print(f'{x_grid_test.shape=}, {x_grid_train.shape=}')
     if args.norm_grid:
         x_grid_min, x_grid_max = np.min(x_grid, axis=0, keepdims=True), np.max(x_grid, axis=0, keepdims=True)
         x_grid = (x_grid- x_grid_min) / (x_grid_max - x_grid_min)

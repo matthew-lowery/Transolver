@@ -92,8 +92,8 @@ def main():
         x_train, x_test = x[:args.ntrain], x[-ntest:]
         y_train, y_test = y[:args.ntrain], y[-ntest:]
         if args.val:
-            x_test = x[-ntest*2:ntest]
-            y_test = y[-ntest*2:ntest]
+            x_test = x[-ntest*2:-ntest]
+            y_test = y[-ntest*2:-ntest]
         x_grid = data['x']
     else:
         ntest = 500; ntrain = args.ntrain
@@ -107,6 +107,8 @@ def main():
            x_test = x[-ntest*2:ntest]
            y_test = y[-ntest*2:ntest]
         x_grid = data['x']
+
+    assert ntest*2 + ntrain <= len(x) # this needs to hold for the validation set up
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}, {x_grid.shape=}')
     if args.norm_grid:
         x_grid_min, x_grid_max = np.min(x_grid, axis=0, keepdims=True), np.max(x_grid, axis=0, keepdims=True)
