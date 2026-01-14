@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+import scipy.io as scio
 import torch
 import torch.nn.functional as F
 from tqdm import *
@@ -11,17 +12,8 @@ from utils.normalizer import UnitTransformer
 import matplotlib.pyplot as plt
 import time
 import wandb
-from scipy.io import loadmat
-
+import scipy
 parser = argparse.ArgumentParser('Training Transolver')
-
-def shuffle(x,y, seed=1):
-    np.random.seed(seed)
-    idx = np.arange(len(x))
-    np.random.shuffle(idx)
-    x = x[idx]
-    y = y[idx]
-    return x,y
 
 def set_seed(seed):    
     torch.manual_seed(seed)
@@ -44,19 +36,28 @@ parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
-parser.add_argument('--project-name', type=str, default='transolver_manifold')
+parser.add_argument('--project-name', type=str, default='ramansh_transolver3')
 parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--wandb', action='store_true')
-parser.add_argument('--norm-grid',type=int, default=0) 
-parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_datasets')
-parser.add_argument('--npoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
-parser.add_argument('--val', action='store_true')
-parser.add_argument('--problem', type=str, choices=['nlpoisson', 'poisson', 'ADRSHEAR'], default='nlpoisson')
-parser.add_argument('--surf', type=str, choices=['sphere', 'torus'], default='torus')
+parser.add_argument('--save', action='store_true')
+parser.add_argument('--norm-grid', action='store_true')
+parser.add_argument('--calc-div', action='store_true')
+parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
+parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno-new')
+parser.add_argument('--model-folder', type=str, default='/projects/bfel/mlowery/transolver_models')
+parser.add_argument('--dataset', type=str, default='taylor_green_time')
+
 args = parser.parse_args()
 set_seed(args.seed)
+
+name = f"{args.dataset}_{args.seed}_{args.ntrain}_all" ## all as in no subsample nymore 
+if not args.wandb:
+    os.environ["WANDB_MODE"] = "disabled"
+wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
+wandb.init(project=args.project_name)
+wandb.config.update(args)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
@@ -75,77 +76,60 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
+    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
 
-    ### wants N,n,1 input for funcs
-    if not args.wandb:
-        os.environ["WANDB_MODE"] = "disabled"
-    wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
-    wandb.init(project=args.project_name, name=f'{args.problem}_{args.ntrain}_{args.npoints}')
-    wandb.config.update(args)
+    x_grid = data['x_grid']; y_grid = data['y_grid']
+    x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
+    if x_train.ndim == 2: x_train = x_train[...,None]
+    if x_test.ndim == 2: x_test = x_test[...,None]
 
-    if args.problem != 'ADRSHEAR':
-        data = loadmat(os.path.join(args.dir, f'{args.problem}_{args.surf}_{args.npoints}_10000.mat'))
-        x = data['fs'].T; y = data['us'].T
-        x = x[...,None]
-        ntest = int(data['N_test'])
-        ntrain = args.ntrain
-        x_train, x_test = x[:args.ntrain], x[-ntest:]
-        y_train, y_test = y[:args.ntrain], y[-ntest:]
-        if args.val:
-            x_test = x[-ntest*2:-ntest]
-            y_test = y[-ntest*2:-ntest]
-        x_grid = data['x']
-    else:
-        ntest = 500; ntrain = args.ntrain
-        data = loadmat(os.path.join(args.dir, f'TimeVaryingADRShear.mat'))
-        x = data['fs_all'].T; y = data['us_all'].T
-        x = x[...,None]
-        x,y = shuffle(x,y)
-        x_train, x_test = x[:ntrain], x[-ntest:]
-        y_train, y_test = y[:ntrain], y[-ntest:]
-        if args.val:
-           x_test = x[-ntest*2:-ntest]
-           y_test = y[-ntest*2:-ntest]
-        x_grid = data['x']
-    print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}, {x_grid.shape=}')
+    ntest = len(x_test)
+    x_train, y_train = x_train[:ntrain], y_train[:ntrain]
 
-    assert ntest*2 + ntrain <= len(x) # so validation set isn't messed up
-
-    if args.norm_grid == 2:
-        x_grid_min, x_grid_max = np.min(x_grid, keepdims=True), np.max(x_grid, keepdims=True)
-        x_grid = (x_grid- x_grid_min) / (x_grid_max - x_grid_min)
+    ### norm rect domain to [0,1]^2
+    if args.norm_grid:
+        y_grid_min, y_grid_max = np.min(y_grid, axis=0, keepdims=True), np.max(y_grid, axis=0, keepdims=True)
+        y_grid = (y_grid- y_grid_min) / ((y_grid_max - y_grid_min)+1e-6)
 
     x_train = torch.tensor(x_train, dtype=torch.float32)
     x_test =  torch.tensor(x_test, dtype=torch.float32)
     y_train = torch.tensor(y_train, dtype=torch.float32)
     y_test = torch.tensor(y_test, dtype=torch.float32)
+    y_grid = torch.tensor(y_grid, dtype=torch.float32)
     x_grid = torch.tensor(x_grid, dtype=torch.float32)
     ###########################
 
-    if args.norm_grid == 3: # 
-        x_grid_normalizer = UnitTransformer(x_grid)
-        x_grid = x_grid_normalizer.encode(x_grid)
+    xy_grid = torch.cat((x_grid, y_grid), dim=0)
+
+    pad = torch.zeros((x_train.shape[0], y_train.shape[1], x_train.shape[-1]))
+    x_train = torch.cat((x_train, pad), dim=1)
+    pad = torch.zeros((x_test.shape[0], y_test.shape[1], x_test.shape[-1]))
+    x_test = torch.cat((x_test, pad), dim=1)
 
     x_normalizer = UnitTransformer(x_train)
     y_normalizer = UnitTransformer(y_train)
 
+    #### In this problem, we just assume the coefficents are function values on the output function's grid, which seems reasonable
     x_train = x_normalizer.encode(x_train)
     x_test = x_normalizer.encode(x_test)
+    ### xgrid is 500,3 xtrain is 10k,500,2 ygrid is 2k,3 ytrain is 10k, 2k,2 
     y_train = y_normalizer.encode(y_train)
 
     x_normalizer.cuda()
     y_normalizer.cuda()
 
-    pos = x_grid
+    pos = xy_grid
     pos_train = pos.repeat(ntrain, 1, 1)
     pos_test = pos.repeat(ntest, 1, 1)
     print("Dataloading is over.")
+
     train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_train, x_train, y_train),
                                                batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_test, x_test, y_test),
                                               batch_size=args.batch_size, shuffle=False)
     in_channels = x_train.shape[-1]
-    out_channels = 1
+    out_channels = y_train.shape[-1]
 
     model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,
@@ -181,9 +165,9 @@ def main():
             x, fx, y = x.cuda(), fx.cuda(), y.cuda()
             optimizer.zero_grad()
             out = model(x, fx=fx).squeeze(-1)  # B, N , 2, fx: B, N, y: B, N
-            out = y_normalizer.decode(out)
+            out = y_normalizer.decode(out[:, -y.shape[1]:])
             y = y_normalizer.decode(y)
-
+            print(out.shape, y.shape)
             l2loss = myloss(out, y)
             loss = l2loss
             loss.backward()
@@ -206,7 +190,7 @@ def main():
         for x, fx, y in test_loader:
             x, fx, y = x.cuda(), fx.cuda(), y.cuda()
             out = model(x, fx=fx).squeeze(-1)
-            out = y_normalizer.decode(out)
+            out = y_normalizer.decode(out[:,-y.shape[1]:])
             out = torch.linalg.norm(out, dim=-1)
             y = torch.linalg.norm(y, dim=-1)
             tl = myloss(out, y).item()
@@ -216,7 +200,31 @@ def main():
     eval_t2 = time.perf_counter()
     print('eval_time: ', eval_t2-eval_t1, 'train_time: ', train_t2-train_t1)
     wandb.log({"test_loss": rel_err, 'eval_time:': eval_t2-eval_t1, 'train_time': train_t2 - train_t1}, step=ep, commit=True)
+    if args.calc_div:
+        y_preds_test = []
+        with torch.no_grad():
+            for x, fx, y in test_loader:
+                x, fx, y = x.cuda(), fx.cuda(), y.cuda()
+                out = model(x, fx=fx).squeeze(-1)
+                out = y_normalizer.decode(out[:, -y.shape[1]:])
+                y_preds_test.append(out)
+                # tl = myloss(out, y).item()
+                rel_err += tl
 
+        y_preds_test = torch.stack(y_preds_test).reshape(ntest, -1, out_channels)
+
+    ### saving model for later use
+    if args.save:
+        os.makedirs(args.model_folder, exist_ok=True)
+        torch.save({
+        "model_state_dict": model.state_dict(),
+        }, os.path.join(args.model_folder, f'{name}.torch'))
+
+        ### saving test output functions for div calc 
+        os.makedirs(args.div_folder, exist_ok=True)
+        scipy.io.savemat(os.path.join(args.div_folder, f'{name}.mat'), {'x_grid': data['x_grid'],
+                                                                        'x_grid_norm': x.cpu().numpy().astype(np.float64),
+                                                                        'y_preds_test': y_preds_test.cpu().numpy().astype(np.float64)})
 
 if __name__ == "__main__":
     main()

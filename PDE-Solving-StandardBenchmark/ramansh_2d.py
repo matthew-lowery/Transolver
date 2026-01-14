@@ -90,6 +90,7 @@ def main():
     #data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
 
     x_grid = data['x_grid']
+    print(x_grid.shape)
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
     if x_train.ndim == 2: x_train = x_train[...,None]
     if x_test.ndim == 2: x_test = x_test[...,None]

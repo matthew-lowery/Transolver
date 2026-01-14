@@ -14,7 +14,7 @@ sp() {
 #SBATCH --partition=gpuA100x4
 #SBATCH --account=bfel-delta-gpu
 #SBATCH --job-name=myjob
-#SBATCH --time=1:00:00
+#SBATCH --time=10:00:00
 #SBATCH --constraint="scratch"
 #SBATCH --gpus-per-node=1
 #SBATCH --output=./out/%x_%A.out
@@ -48,6 +48,6 @@ EOF
 #done
 #
 for seed in 1 2 3; do
-sp "python3 ramansh_taylor_green_time_coeffs2.py --ntrain=500 --norm-grid --wandb --n-heads=6 --n-layers=5 --n-hidden=64 --slice-num=32 --save --calc-div"
-sp "python3 ramansh_taylor_green_coeffs2.py --ntrain=5000 --norm-grid --wandb --n-heads=6 --n-layers=4 --n-hidden=64 --slice-num=32 --save --calc-div"
+sp "python3 ramansh_taylor_green_time_coeffs2.py  --seed=$seed --ntrain=5000 --norm-grid --wandb --n-heads=6 --n-layers=5 --n-hidden=64 --slice-num=32 --save --calc-div"
+#sp "python3 ramansh_taylor_green_coeffs2.py  --seed=$seed --ntrain=5000 --norm-grid --wandb --n-heads=6 --n-layers=4 --n-hidden=64 --slice-num=32 --save --calc-div"
 done

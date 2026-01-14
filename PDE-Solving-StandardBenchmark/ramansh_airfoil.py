@@ -79,16 +79,16 @@ def main():
     data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
     #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
     print(data.keys())
-    x_grid = data['x_grid']; y = data['y'] ### ntrain, 2k, 2; ntrain, 500, 3
+    x_grid = data['x_grid']; y = data['y']; y_grid = data['y_grid'] ### ntrain, 2k, 2; ntrain, 500, 3
     pad = np.zeros((x_grid.shape[0], x_grid.shape[1], 1))
     x_grid = np.concatenate((x_grid, pad), axis=-1)
     x_grid = np.concatenate((x_grid, np.repeat(y_grid[None], len(x_grid), axis=0)), axis=1) ### ntrain, 2500, 3
-    
+    print(x_grid.shape, y.shape, y_grid.shape) 
     ntest = 200
     y_train = y[:args.ntrain]; y_test = y[-200:]
     x_grid_train = x_grid[:args.ntrain]; x_grid_test = x_grid[-200:]
 
-    #### range normalize input coords to [0,1]^2
+    #### range normalize input coords to [0,1]^3
     min, max = np.min(x_grid_train, axis=(0,1), keepdims=True), np.max(x_grid_train, axis=(0,1),keepdims=True)
     x_grid_train = (x_grid_train - min) / ((max-min) + 1e-6)
     x_grid_test = (x_grid_test - min) / ((max-min) + 1e-6)
@@ -124,7 +124,7 @@ def main():
     # in_channels = x_train.shape[-1]
     out_channels = y_train.shape[-1]
 
-    model = get_model(args).Model(space_dim=2,
+    model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,
                                   n_hidden=args.n_hidden,
                                   dropout=args.dropout,
