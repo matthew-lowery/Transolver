@@ -44,17 +44,18 @@ parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--ntrain', type=int, default=1000)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
-parser.add_argument('--project-name', type=str, default='transolver_manifold')
+parser.add_argument('--project-name', type=str, default='transolver_manifold_many')
 parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--wandb', action='store_true')
-parser.add_argument('--norm-grid',type=int, default=0) 
+parser.add_argument('--norm-grid', action='store_true')
 parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_datasets')
 parser.add_argument('--npoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
 parser.add_argument('--val', action='store_true')
-parser.add_argument('--problem', type=str, choices=['nlpoisson', 'poisson', 'ADRSHEAR'], default='nlpoisson')
-parser.add_argument('--surf', type=str, choices=['sphere', 'torus'], default='torus')
+parser.add_argument('--problem', type=str, default='rd', choices=['nlp', 'poisson', 'rd'])
+parser.add_argument('--k-train', type=int, default=2) ### max is 12
+parser.add_argument('--k-test', type=int, default=5)
 args = parser.parse_args()
 set_seed(args.seed)
 
@@ -80,53 +81,69 @@ def main():
     if not args.wandb:
         os.environ["WANDB_MODE"] = "disabled"
     wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
-    wandb.init(project=args.project_name, name=f'{args.problem}_{args.ntrain}_{args.npoints}')
+    wandb.init(project=args.project_name, name=f'{args.problem}_{args.k_train}')
     wandb.config.update(args)
 
-    if args.problem != 'ADRSHEAR':
-        data = loadmat(os.path.join(args.dir, f'{args.problem}_{args.surf}_{args.npoints}_10000.mat'))
-        x = data['fs'].T; y = data['us'].T
-        x = x[...,None]
-        ntest = int(data['N_test'])
-        ntrain = args.ntrain
-        x_train, x_test = x[:args.ntrain], x[-ntest:]
-        y_train, y_test = y[:args.ntrain], y[-ntest:]
-        if args.val:
-            x_test = x[-ntest*2:-ntest]
-            y_test = y[-ntest*2:-ntest]
-        x_grid = data['x']
-    else:
-        ntest = 500; ntrain = args.ntrain
-        data = loadmat(os.path.join(args.dir, f'TimeVaryingADRShear.mat'))
-        x = data['fs_all'].T; y = data['us_all'].T
-        x = x[...,None]
-        x,y = shuffle(x,y)
-        x_train, x_test = x[:ntrain], x[-ntest:]
-        y_train, y_test = y[:ntrain], y[-ntest:]
-        if args.val:
-           x_test = x[-ntest*2:-ntest]
-           y_test = y[-ntest*2:-ntest]
-        x_grid = data['x']
+    data = loadmat(os.path.join(args.dir, f'frac_{args.problem}_isPositive_manifold_many.mat'))
+    F_train = np.stack([x[0] for x in data['F_train']]); F_test = np.stack([x[0] for x in data['F_test']])
+    U_train = np.stack([x[0] for x in data['U_train']]); U_test = np.stack([x[0] for x in data['U_test']])
+    x_grid = np.stack([x[0] for x in data['surfs']])
 
-    assert ntest*2 + ntrain <= len(x) # this needs to hold for the validation set up
-    print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}, {x_grid.shape=}')
+    manifold_coords = data['t'][0]
 
-    assert ntest*2 + ntrain <= len(x) # so validation set isn't messed up
+    np.random.seed(0)
+    perm = np.random.permutation(manifold_coords).astype(np.int32)
+    train_manifold_idx = perm[:args.k_train]; test_manifold_idx = perm[-args.k_test:]
+    assert args.k_test*2 + args.k_train <= len(manifold_coords) # this needs to hold for the validation set up
+    if args.val: test_manifold_idx = perm[-args.k_test*2:-args.k_test]
 
-    if args.norm_grid == 2:
-        x_grid_min, x_grid_max = np.min(x_grid, keepdims=True), np.max(x_grid, keepdims=True)
+
+    F_train = F_train[train_manifold_idx]
+    N_each_k_train = F_train.shape[1]
+    N_each_k_test = F_test.shape[1]
+    mc = manifold_coords[train_manifold_idx] 
+    mc = np.broadcast_to(mc[:,None,None], F_train.shape)
+    F_train = np.concatenate((F_train[...,None], mc[...,None]), axis=-1) # k,N,n,2
+    F_train = F_train.reshape(-1, x_grid.shape[1], 2)
+    F_test = F_test[test_manifold_idx] # k,N,n
+    mc = manifold_coords[test_manifold_idx] 
+    mc = np.broadcast_to(mc[:,None,None], F_test.shape)
+    F_test = np.concatenate((F_test[...,None], mc[...,None]), axis=-1) # k,N,n,2
+
+    F_test = F_test.reshape(-1, x_grid.shape[1], 2)
+    U_train = U_train[train_manifold_idx]; U_test = U_test[test_manifold_idx]
+    U_train = U_train.reshape(-1, U_train.shape[-1])
+    U_test = U_test.reshape(-1, U_test.shape[-1])
+    ###########################################################################################################
+
+    ### don't have manifold coords unforch, crap
+    x_train, x_test = F_train, F_test ## shuffle these?
+    y_train, y_test = U_train, U_test
+    
+    ntrain = len(x_train)
+    ntest = len(x_test)
+
+    n_samples = x_train.shape[1]
+
+    x_grid_train = np.repeat(x_grid[train_manifold_idx,None], N_each_k_train, axis=1)
+    x_grid_train = x_grid_train.reshape(-1,x_grid.shape[1], 3)
+
+    x_grid_test = np.repeat(x_grid[test_manifold_idx,None], N_each_k_test, axis=1)
+    x_grid_test = x_grid_test.reshape(-1,x_grid.shape[1], 3)
+
+    print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}')
+    print(f'{x_grid_test.shape=}, {x_grid_train.shape=}')
+    if args.norm_grid:
+        x_grid_min, x_grid_max = np.min(x_grid, axis=0, keepdims=True), np.max(x_grid, axis=0, keepdims=True)
         x_grid = (x_grid- x_grid_min) / (x_grid_max - x_grid_min)
 
     x_train = torch.tensor(x_train, dtype=torch.float32)
     x_test =  torch.tensor(x_test, dtype=torch.float32)
     y_train = torch.tensor(y_train, dtype=torch.float32)
     y_test = torch.tensor(y_test, dtype=torch.float32)
-    x_grid = torch.tensor(x_grid, dtype=torch.float32)
+    x_grid_train = torch.tensor(x_grid_train, dtype=torch.float32)
+    x_grid_test = torch.tensor(x_grid_test, dtype=torch.float32)
     ###########################
-
-    if args.norm_grid == 3: # 
-        x_grid_normalizer = UnitTransformer(x_grid)
-        x_grid = x_grid_normalizer.encode(x_grid)
 
     x_normalizer = UnitTransformer(x_train)
     y_normalizer = UnitTransformer(y_train)
@@ -138,9 +155,9 @@ def main():
     x_normalizer.cuda()
     y_normalizer.cuda()
 
-    pos = x_grid
-    pos_train = pos.repeat(ntrain, 1, 1)
-    pos_test = pos.repeat(ntest, 1, 1)
+    pos_train = x_grid_train 
+    pos_test = x_grid_test 
+
     print("Dataloading is over.")
     train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos_train, x_train, y_train),
                                                batch_size=args.batch_size, shuffle=True)
