@@ -111,11 +111,6 @@ def main():
     assert ntest*2 + ntrain <= len(x) # this needs to hold for the validation set up
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}, {x_grid.shape=}')
 
-    assert ntest*2 + ntrain <= len(x) # so validation set isn't messed up
-
-    if args.norm_grid == 2:
-        x_grid_min, x_grid_max = np.min(x_grid, keepdims=True), np.max(x_grid, keepdims=True)
-        x_grid = (x_grid- x_grid_min) / (x_grid_max - x_grid_min)
 
     x_train = torch.tensor(x_train, dtype=torch.float32)
     x_test =  torch.tensor(x_test, dtype=torch.float32)
