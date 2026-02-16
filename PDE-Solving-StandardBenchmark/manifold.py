@@ -7,7 +7,7 @@ from tqdm import *
 from utils.testloss import TestLoss
 from einops import rearrange
 from model_dict import get_model
-from utils.normalizer import UnitTransformer
+from utils.normalizer import UnitTransformer, UnitTransformerAll
 import matplotlib.pyplot as plt
 import time
 import wandb
@@ -111,6 +111,9 @@ def main():
     assert ntest*2 + ntrain <= len(x) # this needs to hold for the validation set up
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}, {x_grid.shape=}')
 
+    if args.norm_grid == 2:
+        xmi, xma = np.min(x_grid, keepdims=True), np.max(x_grid, keepdims=True)
+        x_grid = (x_grid - xmi) / ((xma - xmi) + 1e-8)
 
     x_train = torch.tensor(x_train, dtype=torch.float32)
     x_test =  torch.tensor(x_test, dtype=torch.float32)
@@ -119,8 +122,8 @@ def main():
     x_grid = torch.tensor(x_grid, dtype=torch.float32)
     ###########################
 
-    if args.norm_grid == 3: # 
-        x_grid_normalizer = UnitTransformer(x_grid)
+    if args.norm_grid == 3:  
+        x_grid_normalizer = UnitTransformerAll(x_grid)
         x_grid = x_grid_normalizer.encode(x_grid)
 
     x_normalizer = UnitTransformer(x_train)

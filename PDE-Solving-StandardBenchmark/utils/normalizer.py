@@ -26,6 +26,45 @@ class IdentityTransformer():
     def decode(self, x):
         return x
 
+class UnitTransformerAll():
+    def __init__(self, X):
+        self.mean = torch.mean(X)
+        self.std = torch.std(X) + 1e-8
+
+    def to(self, device):
+        self.mean = self.mean.to(device)
+        self.std = self.std.to(device)
+        return self
+
+    def cuda(self):
+        self.mean = self.mean.cuda()
+        self.std = self.std.cuda()
+
+    def cpu(self):
+        self.mean = self.mean.cpu()
+        self.std = self.std.cpu()
+
+    def encode(self, x):
+        x = (x - self.mean) / (self.std)
+        return x
+
+    def decode(self, x):
+        return x * self.std + self.mean
+
+    def transform(self, X, inverse=True, component='all'):
+        if component == 'all' or 'all-reduce':
+            if inverse:
+                orig_shape = X.shape
+                return (X * (self.std - 1e-8) + self.mean).view(orig_shape)
+            else:
+                return (X - self.mean) / self.std
+        else:
+            if inverse:
+                orig_shape = X.shape
+                return (X * (self.std[:, component] - 1e-8) + self.mean[:, component]).view(orig_shape)
+            else:
+                return (X - self.mean[:, component]) / self.std[:, component]
+
 
 class UnitTransformer():
     def __init__(self, X):

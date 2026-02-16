@@ -7,7 +7,7 @@ from tqdm import *
 from utils.testloss import TestLoss
 from einops import rearrange
 from model_dict import get_model
-from utils.normalizer import UnitTransformer
+from utils.normalizer import UnitTransformer, UnitTransformerAll
 import matplotlib.pyplot as plt
 import time
 import wandb
@@ -49,9 +49,9 @@ parser.add_argument('--slice-num', type=int, default=16)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--wandb', action='store_true')
-parser.add_argument('--norm-grid', action='store_true')
+parser.add_argument('--norm-grid', type=int, default=0) 
 parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_datasets')
-parser.add_argument('--npoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
+parser.add_argument('--n opoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
 parser.add_argument('--val', action='store_true')
 parser.add_argument('--problem', type=str, default='rd', choices=['nlp', 'poisson', 'rd'])
 parser.add_argument('--k-train', type=int, default=2) ### max is 12
@@ -133,9 +133,12 @@ def main():
 
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}')
     print(f'{x_grid_test.shape=}, {x_grid_train.shape=}')
-    if args.norm_grid:
-        x_grid_min, x_grid_max = np.min(x_grid, axis=0, keepdims=True), np.max(x_grid, axis=0, keepdims=True)
-        x_grid = (x_grid- x_grid_min) / (x_grid_max - x_grid_min)
+
+    # range norm
+    if args.norm_grid == 2:
+        xmi, xma = np.min(x_grid_train, keepdims=True), np.max(x_grid_train, keepdims=True)
+        x_grid_train = (x_grid_train - xmi) / ((xma - xmi) + 1e-8)
+        x_grid_test = (x_grid_test - xmi) / ((xma - xmi) + 1e-8)
 
     x_train = torch.tensor(x_train, dtype=torch.float32)
     x_test =  torch.tensor(x_test, dtype=torch.float32)
@@ -145,6 +148,14 @@ def main():
     x_grid_test = torch.tensor(x_grid_test, dtype=torch.float32)
     ###########################
 
+    # mean/std norm
+    if args.norm_grid == 3: # 
+        x_grid_normalizer = UnitTransformerAll(x_grid_train)
+        x_grid_train = x_grid_normalizer.encode(x_grid_train)
+        x_grid_test = x_grid_normalizer.encode(x_grid_test)
+
+ 
+ 
     x_normalizer = UnitTransformer(x_train)
     y_normalizer = UnitTransformer(y_train)
 
