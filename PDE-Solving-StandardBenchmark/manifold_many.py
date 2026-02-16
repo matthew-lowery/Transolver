@@ -15,14 +15,6 @@ from scipy.io import loadmat
 
 parser = argparse.ArgumentParser('Training Transolver')
 
-def shuffle(x,y, seed=1):
-    np.random.seed(seed)
-    idx = np.arange(len(x))
-    np.random.shuffle(idx)
-    x = x[idx]
-    y = y[idx]
-    return x,y
-
 def set_seed(seed):    
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -41,7 +33,8 @@ parser.add_argument('--max_grad_norm', type=float, default=None)
 parser.add_argument('--downsample', type=int, default=1)
 parser.add_argument('--mlp_ratio', type=int, default=1)
 parser.add_argument('--dropout', type=float, default=0.0)
-parser.add_argument('--ntrain', type=int, default=1000)
+parser.add_argument('--ntrain', type=int, default=1200)
+parser.add_argument('--ntest', type=int, default=300)
 parser.add_argument('--unified_pos', type=int, default=0)
 parser.add_argument('--ref', type=int, default=8)
 parser.add_argument('--project-name', type=str, default='transolver_manifold_many')
@@ -50,18 +43,19 @@ parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--wandb', action='store_true')
 parser.add_argument('--norm-grid', type=int, default=0) 
-parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_datasets')
+#parser.add_argument('--dir', type=str, default='/projects/bgcs/mlowery/manifold_datasets')
+parser.add_argument('--coords', action='store_true')
+parser.add_argument('--dir', type=str, default='../../matlab_master_rbffdcodes/Manifolds/OperatorLearning/manifold_datasets/')
 parser.add_argument('--n opoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
 parser.add_argument('--val', action='store_true')
 parser.add_argument('--problem', type=str, default='rd', choices=['nlp', 'poisson', 'rd'])
-parser.add_argument('--k-train', type=int, default=2) ### max is 12
-parser.add_argument('--k-test', type=int, default=5)
+parser.add_argument('--ktrain', type=int, default=2) ### max is 12
+parser.add_argument('--ktest', type=int, default=5)
 args = parser.parse_args()
 set_seed(args.seed)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-ntrain = args.ntrain
 epochs = args.epochs
 
 
@@ -81,55 +75,36 @@ def main():
     if not args.wandb:
         os.environ["WANDB_MODE"] = "disabled"
     wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
-    wandb.init(project=args.project_name, name=f'{args.problem}_{args.k_train}')
+    wandb.init(project=args.project_name, name=f'{args.problem}_{args.ktrain}')
     wandb.config.update(args)
 
     data = loadmat(os.path.join(args.dir, f'frac_{args.problem}_isPositive_manifold_many.mat'))
-    F_train = np.stack([x[0] for x in data['F_train']]); F_test = np.stack([x[0] for x in data['F_test']])
-    U_train = np.stack([x[0] for x in data['U_train']]); U_test = np.stack([x[0] for x in data['U_test']])
-    x_grid = np.stack([x[0] for x in data['surfs']])
+    f_train = np.stack([x[0] for x in data['F_train']])[:args.ktrain, :args.ntrain] # (k, n, n) -> (17, 1200, 2500)
+    f_test = np.stack([x[0] for x in data['F_test']])[:args.ktest, :args.ntest]
+    u_train = np.stack([x[0] for x in data['U_train']])[:args.ktrain, :args.ntrain]
+    u_test = np.stack([x[0] for x in data['U_test']])[:args.ktest, :args.ntest]
 
-    manifold_coords = data['t'][0]
+    nk, _, n = f_train.shape
+    print(f_train.shape, f_test.shape)
 
-    np.random.seed(0)
-    perm = np.random.permutation(manifold_coords).astype(np.int32)
-    train_manifold_idx = perm[:args.k_train]; test_manifold_idx = perm[-args.k_test:]
-    assert args.k_test*2 + args.k_train <= len(manifold_coords) # this needs to hold for the validation set up
-    if args.val: test_manifold_idx = perm[-args.k_test*2:-args.k_test]
+    if args.coords:
+        x = np.stack([x[0] for x in data['surfs']]) # (k, n, 3)
 
+    else:
+        k = data['t'][0]
+        x = np.repeat(k[:,None,None], n, axis=1) # (k, n, 1)
+        
 
-    F_train = F_train[train_manifold_idx]
-    N_each_k_train = F_train.shape[1]
-    N_each_k_test = F_test.shape[1]
-    mc = manifold_coords[train_manifold_idx] 
-    mc = np.broadcast_to(mc[:,None,None], F_train.shape)
-    F_train = np.concatenate((F_train[...,None], mc[...,None]), axis=-1) # k,N,n,2
-    F_train = F_train.reshape(-1, x_grid.shape[1], 2)
-    F_test = F_test[test_manifold_idx] # k,N,n
-    mc = manifold_coords[test_manifold_idx] 
-    mc = np.broadcast_to(mc[:,None,None], F_test.shape)
-    F_test = np.concatenate((F_test[...,None], mc[...,None]), axis=-1) # k,N,n,2
+    x_train = f_train.reshape(f_train.shape[0] * f_train.shape[1], -1, 1)
+    x_test = f_test.reshape(f_test.shape[0] * f_test.shape[1], -1, 1)
 
-    F_test = F_test.reshape(-1, x_grid.shape[1], 2)
-    U_train = U_train[train_manifold_idx]; U_test = U_test[test_manifold_idx]
-    U_train = U_train.reshape(-1, U_train.shape[-1])
-    U_test = U_test.reshape(-1, U_test.shape[-1])
-    ###########################################################################################################
+    y_train = u_train.reshape(u_train.shape[0] * u_train.shape[1], -1)
+    y_test = u_test.reshape(u_test.shape[0] * u_test.shape[1], -1)
 
-    ### don't have manifold coords unforch, crap
-    x_train, x_test = F_train, F_test ## shuffle these?
-    y_train, y_test = U_train, U_test
-    
-    ntrain = len(x_train)
-    ntest = len(x_test)
-
-    n_samples = x_train.shape[1]
-
-    x_grid_train = np.repeat(x_grid[train_manifold_idx,None], N_each_k_train, axis=1)
-    x_grid_train = x_grid_train.reshape(-1,x_grid.shape[1], 3)
-
-    x_grid_test = np.repeat(x_grid[test_manifold_idx,None], N_each_k_test, axis=1)
-    x_grid_test = x_grid_test.reshape(-1,x_grid.shape[1], 3)
+    x_grid_train = np.repeat(x[:args.ktrain,None], f_train.shape[1], axis=1) # ktr, Ntr, n, 1/3
+    x_grid_train = x_grid_train.reshape(len(x_train), n, -1)
+    x_grid_test = np.repeat(x[:args.ktest,None], f_test.shape[1], axis=1) # kte, Nte, n, 1/3
+    x_grid_test = x_grid_test.reshape(len(x_test), n, -1)
 
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}')
     print(f'{x_grid_test.shape=}, {x_grid_train.shape=}')
@@ -148,13 +123,15 @@ def main():
     x_grid_test = torch.tensor(x_grid_test, dtype=torch.float32)
     ###########################
 
+    ntrain = len(x_train)
+    ntest = len(x_test)
+
     # mean/std norm
     if args.norm_grid == 3: # 
         x_grid_normalizer = UnitTransformerAll(x_grid_train)
         x_grid_train = x_grid_normalizer.encode(x_grid_train)
         x_grid_test = x_grid_normalizer.encode(x_grid_test)
 
- 
  
     x_normalizer = UnitTransformer(x_train)
     y_normalizer = UnitTransformer(y_train)
