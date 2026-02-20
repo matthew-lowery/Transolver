@@ -104,7 +104,7 @@ def main():
 
     x_grid_train = np.repeat(x[:args.ktrain,None], f_train.shape[1], axis=1) # ktr, Ntr, n, 1/3
     x_grid_train = x_grid_train.reshape(len(x_train), n, -1)
-    x_grid_test = np.repeat(x[:args.ktest,None], f_test.shape[1], axis=1) # kte, Nte, n, 1/3
+    x_grid_test = np.repeat(x[-args.ktest:,None], f_test.shape[1], axis=1) # kte, Nte, n, 1/3
     x_grid_test = x_grid_test.reshape(len(x_test), n, -1)
 
     print(f'{x_train.shape=}, {x_test.shape=}, {y_train.shape=}, {y_test.shape=}')
