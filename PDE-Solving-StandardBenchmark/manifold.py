@@ -15,13 +15,6 @@ from scipy.io import loadmat
 
 parser = argparse.ArgumentParser('Training Transolver')
 
-def shuffle(x,y, seed=1):
-    np.random.seed(seed)
-    idx = np.arange(len(x))
-    np.random.shuffle(idx)
-    x = x[idx]
-    y = y[idx]
-    return x,y
 
 def set_seed(seed):    
     torch.manual_seed(seed)
@@ -91,21 +84,14 @@ def main():
         ntrain = args.ntrain
         x_train, x_test = x[:args.ntrain], x[-ntest:]
         y_train, y_test = y[:args.ntrain], y[-ntest:]
-        if args.val:
-            x_test = x[-ntest*2:-ntest]
-            y_test = y[-ntest*2:-ntest]
         x_grid = data['x']
     else:
         ntest = 500; ntrain = args.ntrain
         data = loadmat(os.path.join(args.dir, f'TimeVaryingADRShear.mat'))
         x = data['fs_all'].T; y = data['us_all'].T
         x = x[...,None]
-        x,y = shuffle(x,y)
         x_train, x_test = x[:ntrain], x[-ntest:]
         y_train, y_test = y[:ntrain], y[-ntest:]
-        if args.val:
-           x_test = x[-ntest*2:-ntest]
-           y_test = y[-ntest*2:-ntest]
         x_grid = data['x']
 
     assert ntest*2 + ntrain <= len(x) # this needs to hold for the validation set up

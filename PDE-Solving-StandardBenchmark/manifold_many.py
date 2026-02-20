@@ -48,7 +48,7 @@ parser.add_argument('--coords', action='store_true')
 parser.add_argument('--dir', type=str, default='../../matlab_master_rbffdcodes/Manifolds/OperatorLearning/manifold_datasets/')
 parser.add_argument('--n opoints', default=2400) ### torus: 2400, 5046, 10086; sphere = 2562, 5762, 10242
 parser.add_argument('--val', action='store_true')
-parser.add_argument('--problem', type=str, default='rd', choices=['nlp', 'poisson', 'rd'])
+parser.add_argument('--problem', type=str, default='rd', choices=['rd'])
 parser.add_argument('--ktrain', type=int, default=2) ### max is 12
 parser.add_argument('--ktest', type=int, default=5)
 args = parser.parse_args()
@@ -67,6 +67,7 @@ def count_parameters(model):
         total_params += params
     print(f"Total Trainable Params: {total_params}")
     return total_params
+
 
 def main():
     ########## load data ########################################################################
