@@ -81,9 +81,9 @@ def main():
 
     data = loadmat(os.path.join(args.dir, f'frac_{args.problem}_isPositive_manifold_many.mat'))
     f_train = np.stack([x[0] for x in data['F_train']])[:args.ktrain, :args.ntrain] # (k, n, n) -> (17, 1200, 2500)
-    f_test = np.stack([x[0] for x in data['F_test']])[:args.ktest, :args.ntest]
+    f_test = np.stack([x[0] for x in data['F_test']])[-args.ktest:, :args.ntest]
     u_train = np.stack([x[0] for x in data['U_train']])[:args.ktrain, :args.ntrain]
-    u_test = np.stack([x[0] for x in data['U_test']])[:args.ktest, :args.ntest]
+    u_test = np.stack([x[0] for x in data['U_test']])[-args.ktest:, :args.ntest]
 
     nk, _, n = f_train.shape
     print(f_train.shape, f_test.shape)
