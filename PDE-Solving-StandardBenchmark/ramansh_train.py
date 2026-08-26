@@ -45,7 +45,7 @@ def union_grid(a,b):
 parser=argparse.ArgumentParser()
 parser.add_argument('--dataset',default='flow_cylinder_laminar')
 parser.add_argument('--model',default='Transolver_Irregular_Mesh')
-parser.add_argument('--data-root',default='/home/ramansh/pde_ml/code/op_dataset')
+parser.add_argument('--data-root',default='/projects/bgcs/mlowery/ram_dataset')
 parser.add_argument('--ntrain',type=int,required=True); parser.add_argument('--npoints',type=int,default=0)
 parser.add_argument('--epochs',type=int,default=500); parser.add_argument('--batch-size',type=int,default=20)
 parser.add_argument('--lr',type=float,default=1e-3); parser.add_argument('--weight_decay',type=float,default=1e-5)
