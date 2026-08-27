@@ -76,6 +76,8 @@ def _fekete_indices(root, problem, size):
 
 def _point_filter(problem, points, point_count, root):
     points = np.asarray(points, dtype=np.float64)
+    if problem == "merge_vortices_easier":
+        points = points[:, :2]
     keep = np.arange(len(points))
     if problem in {
         "taylor_green_exact", "taylor_green_coeffs", "taylor_green_time", "taylor_green_time_coeffs",
@@ -115,6 +117,17 @@ def _split_indices(count, ntrain, test_count):
 
 
 def _build_values(problem, data, coeffs, indices, points, keep, selected, full_point_count):
+    if problem in {"taylor_green_time", "taylor_green_time_coeffs"}:
+        if problem.endswith("coeffs"):
+            inputs = np.asarray(coeffs["init_coeffs"])[indices]
+        else:
+            inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)[indices]
+        outputs = np.stack([
+            _point_values(data[f"vel_{level.replace('.', '')}"], keep, selected, full_point_count)[indices]
+            for level in TIME_LEVELS
+        ], axis=2)
+        return inputs, outputs
+
     velocity = _point_values(data["velocity"], keep, selected, full_point_count)[indices]
 
     if problem in {"flow_cylinder_laminar", "flow_cylinder_shedding", "lid_cavity_flow"}:
@@ -129,9 +142,16 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
     if problem == "backward_facing_step":
         inlet = np.asarray(data["init_velocity"])[indices].copy()
         inlet[:, [0, 1]] = inlet[:, [1, 0]]
-        inputs = np.zeros((len(indices), len(points), 2), dtype=velocity.dtype)
-        left = np.flatnonzero(np.isclose(points[:, 0], points[:, 0].min()))
+        full_points = np.asarray(data["points"])
+        if full_points.ndim > 2:
+            full_points = full_points.reshape(-1, full_points.shape[-1])
+        inputs = np.zeros((len(indices), len(full_points), 2), dtype=velocity.dtype)
+        left = np.flatnonzero(np.isclose(full_points[:, 0], 0) & (full_points[:, 1] >= 0))
+        left = left[np.argsort(full_points[left, 1])]
+        if len(left) != inlet.shape[1]:
+            raise ValueError(f"Expected {len(left)} inlet values, got {inlet.shape[1]}")
         inputs[:, left, 0] = inlet
+        inputs = _point_values(inputs, keep, selected, full_point_count)
         return inputs, _with_channel(velocity)
 
     if problem == "merge_vortices_easier":
@@ -159,17 +179,6 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
     if problem == "taylor_green_exact":
         inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)[indices]
         return _with_channel(inputs), _with_channel(velocity)
-
-    if problem in {"taylor_green_time", "taylor_green_time_coeffs"}:
-        if problem.endswith("coeffs"):
-            inputs = np.asarray(coeffs["init_coeffs"])[indices]
-        else:
-            inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)[indices]
-        outputs = np.stack([
-            _point_values(data[f"vel_{level.replace('.', '')}"], keep, selected, full_point_count)[indices]
-            for level in TIME_LEVELS
-        ], axis=2)
-        return inputs, outputs
 
     raise ValueError(f"Unsupported dataset: {problem}")
 
@@ -208,7 +217,8 @@ def load_dataset(problem, ntrain, point_count, data_root, test_count=N_TEST):
     if raw_points.ndim > 2:
         raw_points = raw_points.reshape(-1, raw_points.shape[-1])
     points, keep, selected = _point_filter(problem, raw_points, point_count, data_root)
-    train_idx, test_idx = _split_indices(np.asarray(data["velocity"]).shape[0], ntrain, test_count)
+    sample_key = "vel_7" if problem in {"taylor_green_time", "taylor_green_time_coeffs"} else "velocity"
+    train_idx, test_idx = _split_indices(np.asarray(data[sample_key]).shape[0], ntrain, test_count)
     train_input, train_output = _build_values(problem, data, coeffs, train_idx, points, keep, selected, len(raw_points))
     test_input, test_output = _build_values(problem, data, coeffs, test_idx, points, keep, selected, len(raw_points))
     geometry = _format_geometry(problem, points, train_input, test_input, train_output, test_output)
@@ -223,7 +233,8 @@ def load_ood_dataset(problem, point_count, data_root, test_count=N_TEST_OOD):
     if raw_points.ndim > 2:
         raw_points = raw_points.reshape(-1, raw_points.shape[-1])
     points, keep, selected = _point_filter(problem, raw_points, point_count, data_root)
-    count = np.asarray(data["velocity"]).shape[0]
+    sample_key = "vel_7" if problem in {"taylor_green_time", "taylor_green_time_coeffs"} else "velocity"
+    count = np.asarray(data[sample_key]).shape[0]
     indices = np.random.default_rng(seed=0).permutation(count)[:test_count]
     test_input, test_output = _build_values(problem, data, coeffs, indices, points, keep, selected, len(raw_points))
     geometry = _format_geometry(problem, points, test_input[:0], test_input, test_output[:0], test_output)
