@@ -42,17 +42,31 @@ def _data_path(root, problem, ood=False):
         return root / "flow_cylinder" / f"data_laminar{suffix}.mat"
     if problem == "flow_cylinder_shedding":
         return root / "flow_cylinder" / f"data_shedding{suffix}.mat"
-    if problem in {"taylor_green", "taylor_green_exact", "taylor_green_coeffs", "taylor_green_time", "taylor_green_time_coeffs"}:
-        if problem in {"taylor_green", "taylor_green_exact"}:
-            return root / "taylor_green" / "data_exact_matt.mat"
-        return root / "taylor_green" / f"data_{'time' if 'time' in problem else 'coeffs' if 'coeffs' in problem else 'exact'}.mat"
+    if problem in {"taylor_green", "taylor_green_exact"}:
+        name = "data_ood.mat" if ood else "data_exact_matt.mat"
+        return root / "taylor_green" / name
+    if problem == "taylor_green_coeffs":
+        name = "data_coeffs_ood.mat" if ood else "data_coeffs.mat"
+        return root / "taylor_green" / name
+    if problem in {"taylor_green_time", "taylor_green_time_coeffs"}:
+        name = "data_time_ood.mat" if ood else "data_time.mat"
+        return root / "taylor_green" / name
     return root / problem / f"data{suffix}.mat"
 
 
 def _load_mat(root, problem, ood=False):
-    data = loadmat(_data_path(root, problem, ood))
-    if problem == "taylor_green_time_coeffs" and not ood:
-        coeffs = loadmat(Path(root) / "taylor_green" / "data_coeffs.mat")
+    data_path = _data_path(root, problem, ood)
+    if not data_path.is_file():
+        raise FileNotFoundError(f"Dataset file not found: {data_path}")
+    data = loadmat(data_path)
+    if problem == "taylor_green_time_coeffs":
+        name = "data_coeffs_ood.mat" if ood else "data_coeffs.mat"
+        coeff_path = Path(root) / "taylor_green" / name
+        if not coeff_path.is_file():
+            raise FileNotFoundError(
+                f"Taylor-Green coefficient inputs not found: {coeff_path}"
+            )
+        coeffs = loadmat(coeff_path)
         return data, coeffs
     return data, None
 
@@ -123,7 +137,7 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
         else:
             inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)[indices]
         outputs = np.stack([
-            _point_values(data[f"vel_{level.replace('.', '')}"], keep, selected, full_point_count)[indices]
+            _point_values(data[f"vel_{round(10 * level)}"], keep, selected, full_point_count)[indices]
             for level in TIME_LEVELS
         ], axis=2)
         return inputs, outputs
@@ -194,8 +208,12 @@ def _format_geometry(problem, points, train_input, test_input, train_output, tes
         else:
             train_input = np.asarray(train_input)
             test_input = np.asarray(test_input)
-        train_output = train_output.reshape(len(train_output), len(output_points), -1)
-        test_output = test_output.reshape(len(test_output), len(output_points), -1)
+        train_output = train_output.reshape(
+            len(train_output), len(output_points), train_output.shape[-1]
+        )
+        test_output = test_output.reshape(
+            len(test_output), len(output_points), test_output.shape[-1]
+        )
         return input_points, output_points, train_input, train_output, test_input, test_output
 
     if problem == "taylor_green_coeffs":

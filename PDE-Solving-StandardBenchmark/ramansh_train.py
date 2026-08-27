@@ -92,10 +92,27 @@ def main():
     rel/=len(xts); wandb.log({'test_loss':rel},commit=True)
     if not args.no_ood:
         try:
-            oi,oo,ox,oy=load_ood_dataset(args.dataset,args.npoints or None,args.data_root); ox=torch.tensor(pad(ox),dtype=torch.float32); oy=torch.tensor(oy,dtype=torch.float32)
-            with torch.no_grad(): opred=yn.decode(model(pos.repeat(len(ox),1,1).cuda(),fx=xn.encode(ox).cuda()).squeeze(-1))[:,out_idx]
-            wandb.log({'ood_loss':loss_fn(torch.linalg.norm(opred,dim=-1),torch.linalg.norm(oy.cuda(),dim=-1)).item()})
-        except (FileNotFoundError, KeyError, ValueError) as exc: print('OOD unavailable:',exc)
+            _, _, ood_inputs, ood_targets = load_ood_dataset(
+                args.dataset, args.npoints or None, args.data_root
+            )
+            device = next(model.parameters()).device
+            ood_inputs = torch.tensor(
+                pad(ood_inputs), dtype=torch.float32, device=device
+            )
+            ood_targets = torch.tensor(
+                ood_targets, dtype=torch.float32, device=device
+            )
+            ood_positions = pos.repeat(len(ood_inputs), 1, 1).to(device)
+            with torch.no_grad():
+                ood_predictions = yn.decode(model(
+                    ood_positions, fx=xn.encode(ood_inputs)
+                ).squeeze(-1))[:, out_idx]
+            wandb.log({'ood_loss': loss_fn(
+                torch.linalg.norm(ood_predictions, dim=-1),
+                torch.linalg.norm(ood_targets, dim=-1),
+            ).item()})
+        except (FileNotFoundError, KeyError, ValueError) as exc:
+            print('OOD unavailable:', exc)
     if args.save:
         os.makedirs(args.model_folder,exist_ok=True); torch.save({'model_state_dict':model.state_dict()},os.path.join(args.model_folder,f'{args.dataset}_{args.seed}_{args.ntrain}.torch'))
         if pred:
