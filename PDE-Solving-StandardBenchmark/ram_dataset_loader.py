@@ -115,15 +115,15 @@ def _split_indices(count, ntrain, test_count):
 
 
 def _build_values(problem, data, coeffs, indices, points, keep, selected, full_point_count):
-    velocity = _point_values(data["velocity"], keep, selected, full_point_count)
+    velocity = _point_values(data["velocity"], keep, selected, full_point_count)[indices]
 
     if problem in {"flow_cylinder_laminar", "flow_cylinder_shedding", "lid_cavity_flow"}:
         key = "init_velocity"
-        inputs = _point_values(data[key], keep, selected, full_point_count)
+        inputs = _point_values(data[key], keep, selected, full_point_count)[indices]
         return _with_channel(inputs), _with_channel(velocity)
 
     if problem == "buoyancy_cavity_flow":
-        inputs = _point_values(data["init_temperature"], keep, selected, full_point_count)
+        inputs = _point_values(data["init_temperature"], keep, selected, full_point_count)[indices]
         return _with_channel(inputs), _with_channel(velocity)
 
     if problem == "backward_facing_step":
@@ -135,7 +135,7 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
         return inputs, _with_channel(velocity)
 
     if problem == "merge_vortices_easier":
-        inputs = _point_values(data["init_vorticity"], keep, selected, full_point_count)
+        inputs = _point_values(data["init_vorticity"], keep, selected, full_point_count)[indices]
         return _with_channel(inputs), _with_channel(velocity)
 
     if problem == "species_transport":
@@ -149,7 +149,7 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
         return inputs, _with_channel(velocity)
 
     if problem == "forced_turb":
-        inputs = _point_values(data["forcing"], keep, selected, full_point_count)
+        inputs = _point_values(data["forcing"], keep, selected, full_point_count)[indices]
         return _with_channel(inputs), _with_channel(velocity)
 
     if problem == "taylor_green_coeffs":
@@ -157,12 +157,14 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
         return inputs, _with_channel(velocity)
 
     if problem == "taylor_green_exact":
-        inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)
+        inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)[indices]
         return _with_channel(inputs), _with_channel(velocity)
 
     if problem in {"taylor_green_time", "taylor_green_time_coeffs"}:
-        source = coeffs["init_coeffs"] if problem.endswith("coeffs") else data["init_velocity"]
-        inputs = np.asarray(source)[indices]
+        if problem.endswith("coeffs"):
+            inputs = np.asarray(coeffs["init_coeffs"])[indices]
+        else:
+            inputs = _point_values(data["init_velocity"], keep, selected, full_point_count)[indices]
         outputs = np.stack([
             _point_values(data[f"vel_{level.replace('.', '')}"], keep, selected, full_point_count)[indices]
             for level in TIME_LEVELS
