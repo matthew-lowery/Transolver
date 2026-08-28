@@ -174,13 +174,7 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
 
     if problem == "species_transport":
         inputs = np.asarray(data["init_velocity"])[indices]
-        inputs = _with_channel(inputs)
-        if inputs.shape[1] < len(points):
-            pad = np.zeros((len(inputs), len(points) - inputs.shape[1], inputs.shape[-1]), dtype=inputs.dtype)
-            inputs = np.concatenate((inputs, pad), axis=1)
-        elif inputs.shape[1] > len(points):
-            inputs = inputs[:, :len(points)]
-        return inputs, _with_channel(velocity)
+        return _with_channel(inputs), _with_channel(velocity)
 
     if problem == "forced_turb":
         inputs = _point_values(data["forcing"], keep, selected, full_point_count)[indices]
@@ -197,7 +191,15 @@ def _build_values(problem, data, coeffs, indices, points, keep, selected, full_p
     raise ValueError(f"Unsupported dataset: {problem}")
 
 
-def _format_geometry(problem, points, train_input, test_input, train_output, test_output):
+def _format_geometry(
+    problem,
+    points,
+    train_input,
+    test_input,
+    train_output,
+    test_output,
+    species_input_points=None,
+):
     if problem in {"taylor_green_time", "taylor_green_time_coeffs"}:
         input_points = np.column_stack((points, np.zeros(len(points))))
         output_points = np.repeat(input_points, len(TIME_LEVELS), axis=0)
@@ -221,10 +223,25 @@ def _format_geometry(problem, points, train_input, test_input, train_output, tes
         test_input = np.repeat(test_input[:, None, :], len(points), axis=1)
 
     if problem == "species_transport":
-        input_points = output_points = points
+        input_points = species_input_points
+        output_points = points
     else:
         input_points = output_points = points
     return input_points, output_points, train_input, train_output, test_input, test_output
+
+
+def _species_input_points(problem, data, data_root):
+    if problem != "species_transport":
+        return None
+    if "bc_points" in data:
+        points = data["bc_points"]
+    else:
+        path = _data_path(data_root, problem)
+        points = loadmat(path, variable_names=("bc_points",))["bc_points"]
+    points = np.asarray(points, dtype=np.float64)
+    if points.ndim > 2:
+        points = points.reshape(-1, points.shape[-1])
+    return points
 
 
 def load_dataset(problem, ntrain, point_count, data_root, test_count=N_TEST):
@@ -239,7 +256,15 @@ def load_dataset(problem, ntrain, point_count, data_root, test_count=N_TEST):
     train_idx, test_idx = _split_indices(np.asarray(data[sample_key]).shape[0], ntrain, test_count)
     train_input, train_output = _build_values(problem, data, coeffs, train_idx, points, keep, selected, len(raw_points))
     test_input, test_output = _build_values(problem, data, coeffs, test_idx, points, keep, selected, len(raw_points))
-    geometry = _format_geometry(problem, points, train_input, test_input, train_output, test_output)
+    geometry = _format_geometry(
+        problem,
+        points,
+        train_input,
+        test_input,
+        train_output,
+        test_output,
+        _species_input_points(problem, data, data_root),
+    )
     return OperatorDataset(*geometry)
 
 
@@ -255,6 +280,14 @@ def load_ood_dataset(problem, point_count, data_root, test_count=N_TEST_OOD):
     count = np.asarray(data[sample_key]).shape[0]
     indices = np.random.default_rng(seed=0).permutation(count)[:test_count]
     test_input, test_output = _build_values(problem, data, coeffs, indices, points, keep, selected, len(raw_points))
-    geometry = _format_geometry(problem, points, test_input[:0], test_input, test_output[:0], test_output)
+    geometry = _format_geometry(
+        problem,
+        points,
+        test_input[:0],
+        test_input,
+        test_output[:0],
+        test_output,
+        _species_input_points(problem, data, data_root),
+    )
     input_points, output_points, _, _, test_input, test_output = geometry
     return input_points, output_points, test_input, test_output
