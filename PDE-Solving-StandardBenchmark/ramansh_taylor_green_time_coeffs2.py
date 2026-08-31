@@ -41,11 +41,13 @@ def build_rbf_fd_gradient(points, order=5):
     for center_idx, center in enumerate(points):
         distances, stencil = tree.query(center, k=stencil_size)
         stencil_points = points[stencil]
-        pairwise = np.linalg.norm(
-            stencil_points[:, None] - stencil_points[None, :], axis=-1
-        )
         scale = distances[-1]
+        if not np.isfinite(scale) or scale <= eps:
+            raise ValueError("RBF-FD stencil contains coincident points")
         local_points = (stencil_points - center) / scale
+        pairwise = np.linalg.norm(
+            local_points[:, None] - local_points[None, :], axis=-1
+        )
         polys = np.prod(
             local_points[:, None, :] ** poly_powers[None, :, :], axis=-1
         )
@@ -56,9 +58,10 @@ def build_rbf_fd_gradient(points, order=5):
 
         derivative = np.zeros((stencil_size + poly_count, spatial_dim))
         derivative[:stencil_size] = (
-            (center - stencil_points)
+            -local_points
             * rbf_power
             * (pairwise[0, :, None] + eps) ** (rbf_power - 2)
+            / scale
         )
         for axis in range(spatial_dim):
             first_power = np.zeros(spatial_dim, dtype=int)
@@ -185,7 +188,12 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    dataset_filename = (
+        'taylor_green_time_coeffs'
+        if args.dataset == 'taylor_green_spacetime_coeffs'
+        else args.dataset
+    )
+    data = np.load(os.path.join(args.dir, f'{dataset_filename}.npz'))
     #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
 
     x_grid = data['x_grid']; y_grid = data['y_grid'] # (2, 3) (2000, 3) (10000, 2000, 2) (200, 2000, 2) (200, 2) (10000, 2)

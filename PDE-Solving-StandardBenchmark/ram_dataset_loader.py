@@ -10,6 +10,20 @@ from scipy.io import loadmat
 N_TEST = 200
 N_TEST_OOD = 100
 TIME_LEVELS = (0.7, 0.8, 0.9, 1.0)
+TRAIN_SAMPLE_COUNTS = {
+    "flow_cylinder_laminar": 100,
+    "flow_cylinder_shedding": 10_000,
+    "lid_cavity_flow": 10_000,
+    "buoyancy_cavity_flow": 10_000,
+    "taylor_green_exact": 5_000,
+    "taylor_green_coeffs": 5_000,
+    "taylor_green_time": 5_000,
+    "taylor_green_time_coeffs": 5_000,
+    "backward_facing_step": 500,
+    "species_transport": 10_000,
+    "merge_vortices_easier": 500,
+    "forced_turb": 10_000,
+}
 
 
 @dataclass
@@ -123,10 +137,14 @@ def _with_channel(values):
     return values[..., None] if values.ndim == 2 else values
 
 
-def _split_indices(count, ntrain, test_count):
-    if ntrain > count - test_count:
-        raise ValueError(f"ntrain={ntrain} leaves fewer than {test_count} test functions")
-    perm = np.random.default_rng(seed=0).permutation(count)
+def _split_indices(problem, count, ntrain, test_count):
+    train_count = TRAIN_SAMPLE_COUNTS[problem]
+    population = train_count + N_TEST
+    if count < population:
+        raise ValueError(f"{problem} has {count} functions; expected at least {population}")
+    if ntrain > train_count:
+        raise ValueError(f"ntrain={ntrain} exceeds {problem}'s {train_count} training functions")
+    perm = np.random.default_rng(seed=0).permutation(population)
     return perm[:ntrain], perm[-test_count:]
 
 
@@ -253,7 +271,9 @@ def load_dataset(problem, ntrain, point_count, data_root, test_count=N_TEST):
         raw_points = raw_points.reshape(-1, raw_points.shape[-1])
     points, keep, selected = _point_filter(problem, raw_points, point_count, data_root)
     sample_key = "vel_7" if problem in {"taylor_green_time", "taylor_green_time_coeffs"} else "velocity"
-    train_idx, test_idx = _split_indices(np.asarray(data[sample_key]).shape[0], ntrain, test_count)
+    train_idx, test_idx = _split_indices(
+        problem, np.asarray(data[sample_key]).shape[0], ntrain, test_count
+    )
     train_input, train_output = _build_values(problem, data, coeffs, train_idx, points, keep, selected, len(raw_points))
     test_input, test_output = _build_values(problem, data, coeffs, test_idx, points, keep, selected, len(raw_points))
     geometry = _format_geometry(

@@ -18,6 +18,13 @@ from scipy.linalg import lstsq
 from scipy.spatial import cKDTree
 
 
+def union_grid(input_grid, output_grid):
+    points = np.concatenate((input_grid, output_grid), axis=0)
+    grid, indices = np.unique(points, axis=0, return_inverse=True)
+    split = len(input_grid)
+    return grid, indices[:split], indices[split:]
+
+
 def build_rbf_fd_gradient(points, order=5):
     points = np.asarray(points, dtype=np.float64)
     spatial_dim = points.shape[1]
@@ -41,11 +48,13 @@ def build_rbf_fd_gradient(points, order=5):
     for center_idx, center in enumerate(points):
         distances, stencil = tree.query(center, k=stencil_size)
         stencil_points = points[stencil]
-        pairwise = np.linalg.norm(
-            stencil_points[:, None] - stencil_points[None, :], axis=-1
-        )
         scale = distances[-1]
+        if not np.isfinite(scale) or scale <= eps:
+            raise ValueError("RBF-FD stencil contains coincident points")
         local_points = (stencil_points - center) / scale
+        pairwise = np.linalg.norm(
+            local_points[:, None] - local_points[None, :], axis=-1
+        )
         polys = np.prod(
             local_points[:, None, :] ** poly_powers[None, :, :], axis=-1
         )
@@ -56,9 +65,10 @@ def build_rbf_fd_gradient(points, order=5):
 
         derivative = np.zeros((stencil_size + poly_count, spatial_dim))
         derivative[:stencil_size] = (
-            (center - stencil_points)
+            -local_points
             * rbf_power
             * (pairwise[0, :, None] + eps) ** (rbf_power - 2)
+            / scale
         )
         for axis in range(spatial_dim):
             first_power = np.zeros(spatial_dim, dtype=int)
@@ -154,7 +164,7 @@ parser.add_argument('--calc-div', action='store_true')
 parser.add_argument('--div-loss', action='store_true')
 parser.add_argument('--div-loss-weight', type=float, default=1.0)
 parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
-parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno-new') ## ignored
+parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno')
 parser.add_argument('--model-folder', type=str, default='/projects/bfel/mlowery/transolver_models')
 parser.add_argument('--dataset', type=str, default='species_transport')
 
@@ -185,13 +195,20 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    # data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
-    # data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
-    #data = np.load('/home/matt/ram_dataset/transolver_species_transport.npz')
-    data = np.load('/projects/bfel/mlowery/transolver_species_transport.npz')
-    x_grid = data['x_grid']; y_idx = data['y_idx']
+    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    input_grid, output_grid = data['x_grid'], data['y_grid']
+    x_grid, x_idx, y_idx = union_grid(input_grid, output_grid)
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
-    print(x_grid.shape, x_train.shape, x_test.shape, y_train.shape, y_test.shape) #(10000, 1388) (200, 1388) (10000, 7000, 3) (200, 7000, 3)
+
+    def pad_inputs(values):
+        if values.ndim == 2:
+            values = values[..., None]
+        padded = np.zeros((len(values), len(x_grid), values.shape[-1]), dtype=values.dtype)
+        padded[:, x_idx] = values
+        return padded
+
+    x_train, x_test = pad_inputs(x_train), pad_inputs(x_test)
+    print(x_grid.shape, x_train.shape, x_test.shape, y_train.shape, y_test.shape)
 
     
     if x_train.ndim == 2: x_train = x_train[...,None]
@@ -238,7 +255,7 @@ def main():
     gradient_operators = None
     interior_mask = None
     if args.div_loss:
-        physical_grid = data['x_grid'][data['y_idx'], :out_channels]
+        physical_grid = output_grid[:, :out_channels]
         gradient_operators = tuple(
             operator.cuda() for operator in build_rbf_fd_gradient(physical_grid)
         )
@@ -343,7 +360,7 @@ def main():
 
         ### saving test output functions for div calc 
         os.makedirs(args.div_folder, exist_ok=True)
-        scipy.io.savemat(os.path.join(args.div_folder, f'{name}.mat'), {'x_grid': data['x_grid'],
+        scipy.io.savemat(os.path.join(args.div_folder, f'{name}.mat'), {'x_grid': output_grid,
                                                                         'x_grid_norm': x.cpu().numpy().astype(np.float64),
                                                                         'y_preds_test': y_preds_test.cpu().numpy().astype(np.float64)})
 

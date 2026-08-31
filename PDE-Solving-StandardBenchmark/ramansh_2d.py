@@ -41,11 +41,13 @@ def build_rbf_fd_gradient(points, order=5):
     for center_idx, center in enumerate(points):
         distances, stencil = tree.query(center, k=stencil_size)
         stencil_points = points[stencil]
-        pairwise = np.linalg.norm(
-            stencil_points[:, None] - stencil_points[None, :], axis=-1
-        )
         scale = distances[-1]
+        if not np.isfinite(scale) or scale <= eps:
+            raise ValueError("RBF-FD stencil contains coincident points")
         local_points = (stencil_points - center) / scale
+        pairwise = np.linalg.norm(
+            local_points[:, None] - local_points[None, :], axis=-1
+        )
         polys = np.prod(
             local_points[:, None, :] ** poly_powers[None, :, :], axis=-1
         )
@@ -56,9 +58,10 @@ def build_rbf_fd_gradient(points, order=5):
 
         derivative = np.zeros((stencil_size + poly_count, spatial_dim))
         derivative[:stencil_size] = (
-            (center - stencil_points)
+            -local_points
             * rbf_power
             * (pairwise[0, :, None] + eps) ** (rbf_power - 2)
+            / scale
         )
         for axis in range(spatial_dim):
             first_power = np.zeros(spatial_dim, dtype=int)
@@ -163,6 +166,7 @@ parser.add_argument('--dataset', type=str, default='backward_facing_step', choic
                                                                                     'lid_cavity_flow', 
                                                                                     'merge_vortices', 
                                                                                     'merge_vortices_easier', 
+                                                                                    'taylor_green',
                                                                                     'taylor_green_exact',
                                                                                     "merge_vortices_easier",
                                                                                     'backward_facing_step_ood'
@@ -195,7 +199,8 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
+    dataset_filename = 'taylor_green_exact' if args.dataset == 'taylor_green' else args.dataset
+    data = np.load(os.path.join(args.dir, f'{dataset_filename}.npz'))
     #data = np.load(f'/home/matt/ram_dataset/geo-fno/{args.dataset}.npz')
 
     x_grid = data['x_grid']

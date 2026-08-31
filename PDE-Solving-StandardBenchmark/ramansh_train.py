@@ -18,14 +18,17 @@ def build_rbf_fd_gradient(points, order=5):
     q=len(powers); k=2*q+1; tree=cKDTree(points); rows=np.repeat(np.arange(len(points)),k)
     cols=np.empty_like(rows); weights=np.empty((d,len(rows))); power=min(max(order-(order%2==0),5),11)
     for i, center in enumerate(points):
-        dist, idx=tree.query(center,k=k); local=(points[idx]-center)/dist[-1]
-        pair=np.linalg.norm(points[idx,None]-points[idx][None,:],axis=-1)
+        dist, idx=tree.query(center,k=k); scale=dist[-1]
+        if not np.isfinite(scale) or scale <= np.finfo(float).eps:
+            raise ValueError('RBF-FD stencil contains coincident points')
+        local=(points[idx]-center)/scale
+        pair=np.linalg.norm(local[:,None]-local[None,:],axis=-1)
         poly=np.prod(local[:,None]**powers[None,:],axis=-1)
         system=np.block([[pair**power,poly],[poly.T,np.zeros((q,q))]])
-        rhs=np.zeros((k+q,d)); rhs[:k]=(center-points[idx])*power*(pair[0,:,None]+np.finfo(float).eps)**(power-2)
+        rhs=np.zeros((k+q,d)); rhs[:k]=-local*power*(pair[0,:,None]+np.finfo(float).eps)**(power-2)/scale
         for axis in range(d):
             unit=np.zeros(d,int); unit[axis]=1
-            rhs[k+np.flatnonzero(np.all(powers==unit,axis=1))[0],axis]=1/dist[-1]
+            rhs[k+np.flatnonzero(np.all(powers==unit,axis=1))[0],axis]=1/scale
         sol=lstsq(system,rhs,lapack_driver='gelsy',check_finite=False)[0]
         sl=slice(i*k,(i+1)*k); cols[sl]=idx; weights[:,sl]=sol[:k].T
     ij=torch.tensor(np.stack((rows,cols)),dtype=torch.long)
