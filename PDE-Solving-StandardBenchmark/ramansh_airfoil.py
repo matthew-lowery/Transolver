@@ -15,6 +15,7 @@ import scipy
 from itertools import product
 from scipy.linalg import lstsq
 from scipy.spatial import cKDTree
+from divergence_metrics import summarize_divergence
 
 
 def build_rbf_fd_gradient(points, order=5):
@@ -234,7 +235,7 @@ def main():
     out_channels = y_train.shape[-1]
     gradient_operators = None
     interior_mask = None
-    if args.div_loss:
+    if args.div_loss or args.calc_div:
         physical_grid = data['y_grid'][:, :out_channels]
         gradient_operators = tuple(
             operator.cuda()
@@ -331,6 +332,7 @@ def main():
                 rel_err += tl
 
         y_preds_test = torch.stack(y_preds_test).reshape(ntest, -1, out_channels)
+        wandb.log(summarize_divergence(y_preds_test, gradient_operators, interior_mask), commit=True)
 
     ### saving model for later use
     if args.save:

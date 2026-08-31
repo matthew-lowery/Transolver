@@ -11,6 +11,7 @@ from model_dict import get_model
 from utils.testloss import TestLoss
 from utils.normalizer import UnitTransformer
 from ram_dataset_loader import load_dataset, load_ood_dataset
+from divergence_metrics import summarize_divergence, interior_mask as build_interior_mask
 
 def build_rbf_fd_gradient(points, order=5):
     points=np.asarray(points,float); d=points.shape[1]
@@ -75,11 +76,14 @@ def main():
     train_loader=torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos.repeat(args.ntrain,1,1),xtr,ytr),batch_size=args.batch_size,shuffle=True)
     test_loader=torch.utils.data.DataLoader(torch.utils.data.TensorDataset(pos.repeat(len(xts),1,1),xts,yts),batch_size=args.batch_size)
     ops=mask=None; div_steps=1
-    if args.div_loss:
+    if args.div_loss or args.calc_div:
         physical=ds.output_points
         if args.dataset in {'taylor_green_spacetime','taylor_green_time','taylor_green_spacetime_coeffs','taylor_green_time_coeffs'}:
             physical=physical.reshape(-1,4,3)[:,0,:2]; div_steps=4
         ops=tuple(o.cuda() for o in build_rbf_fd_gradient(physical)); mask=torch.ones(len(physical),dtype=torch.bool).cuda()
+        metric_mask=build_interior_mask(physical).cuda()
+    else:
+        metric_mask=None
     model=get_model(args).Model(space_dim=dim,n_layers=args.n_layers,n_hidden=args.n_hidden,dropout=args.dropout,n_head=args.n_heads,Time_Input=False,mlp_ratio=args.mlp_ratio,fun_dim=xtr.shape[-1],out_dim=ytr.shape[-1],slice_num=args.slice_num,ref=args.ref).cuda()
     opt=torch.optim.Adam(model.parameters(),lr=args.lr,weight_decay=args.weight_decay); sched=torch.optim.lr_scheduler.OneCycleLR(opt,max_lr=args.lr,epochs=args.epochs,steps_per_epoch=len(train_loader)); loss_fn=TestLoss(size_average=False)
     for ep in range(args.epochs):
@@ -92,7 +96,10 @@ def main():
     with torch.no_grad():
         for p,fx,y in test_loader:
             out=yn.decode(model(p.cuda(),fx=fx.cuda()).squeeze(-1))[:,out_idx]; pred.append(out.cpu()); rel+=loss_fn(torch.linalg.norm(out,dim=-1),torch.linalg.norm(y.cuda(),dim=-1)).item()
-    rel/=len(xts); wandb.log({'test_loss':rel},commit=True)
+    rel/=len(xts); wandb.log({'test_loss':rel},commit=not args.calc_div)
+    if args.calc_div:
+        metrics=summarize_divergence(torch.cat(pred).cuda(), ops, metric_mask, div_steps)
+        wandb.log(metrics, commit=True)
     if not args.no_ood:
         try:
             _, _, ood_inputs, ood_targets = load_ood_dataset(

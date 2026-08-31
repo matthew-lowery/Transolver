@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import time
 import wandb
 import scipy
+from divergence_metrics import build_rbf_fd_gradient, interior_mask as build_interior_mask, summarize_divergence
 parser = argparse.ArgumentParser('Training Transolver')
 
 def set_seed(seed):    
@@ -126,6 +127,11 @@ def main():
                                               batch_size=args.batch_size, shuffle=False)
     in_channels = x_train.shape[-1]
     out_channels = y_train.shape[-1]
+    gradient_operators = interior_mask = None
+    if args.calc_div:
+        physical_grid = data['y_grid'].reshape(-1, 4, 3)[:, 0, :2]
+        gradient_operators = tuple(o.cuda() for o in build_rbf_fd_gradient(physical_grid))
+        interior_mask = build_interior_mask(physical_grid).cuda()
 
     model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,
@@ -208,6 +214,7 @@ def main():
                 rel_err += tl
 
         y_preds_test = torch.stack(y_preds_test).reshape(ntest, -1, out_channels)
+        wandb.log(summarize_divergence(y_preds_test, gradient_operators, interior_mask, time_steps=4), commit=True)
 
     ### saving model for later use
     if args.save:
