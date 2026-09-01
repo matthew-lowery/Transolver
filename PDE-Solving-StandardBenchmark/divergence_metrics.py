@@ -6,7 +6,7 @@ from scipy.linalg import lstsq
 from scipy.spatial import cKDTree
 
 
-def build_rbf_fd_gradient(points, order=5):
+def build_rbf_fd_gradient(points, order=2):
     points = np.asarray(points, dtype=np.float64)
     dimension = points.shape[1]
     powers = np.asarray([p for p in product(range(order + 1), repeat=dimension) if sum(p) <= order])

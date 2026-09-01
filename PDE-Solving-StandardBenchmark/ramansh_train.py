@@ -13,7 +13,7 @@ from utils.normalizer import UnitTransformer
 from ram_dataset_loader import load_dataset, load_ood_dataset
 from divergence_metrics import summarize_divergence, interior_mask as build_interior_mask
 
-def build_rbf_fd_gradient(points, order=5):
+def build_rbf_fd_gradient(points, order=2):
     points=np.asarray(points,float); d=points.shape[1]
     powers=np.asarray([p for p in product(range(order+1),repeat=d) if sum(p)<=order])
     q=len(powers); k=2*q+1; tree=cKDTree(points); rows=np.repeat(np.arange(len(points)),k)
