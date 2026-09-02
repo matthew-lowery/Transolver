@@ -151,6 +151,8 @@ parser.add_argument('--wandb', action='store_true')
 parser.add_argument('--save', action='store_true')
 parser.add_argument('--norm-grid', action='store_true')
 parser.add_argument('--calc-div', action='store_true')
+parser.add_argument('--div-order', type=int, default=2,
+                    help='RBF-FD polynomial order for divergence')
 parser.add_argument('--div-loss', action='store_true')
 parser.add_argument('--div-loss-weight', type=float, default=1.0)
 parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
@@ -239,7 +241,7 @@ def main():
         physical_grid = data['y_grid'][:, :out_channels]
         gradient_operators = tuple(
             operator.cuda()
-            for operator in build_rbf_fd_gradient(physical_grid)
+            for operator in build_rbf_fd_gradient(physical_grid, order=args.div_order)
         )
         interior_mask = build_interior_mask(physical_grid).cuda()
 

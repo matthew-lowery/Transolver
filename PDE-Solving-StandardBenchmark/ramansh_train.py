@@ -57,7 +57,7 @@ parser.add_argument('--n-hidden',type=int,default=32); parser.add_argument('--n-
 parser.add_argument('--unified_pos',type=int,default=0)
 parser.add_argument('--slice-num',type=int,default=16); parser.add_argument('--ref',type=int,default=8); parser.add_argument('--mlp_ratio',type=int,default=1); parser.add_argument('--dropout',type=float,default=0.)
 parser.add_argument('--gpu',default='0'); parser.add_argument('--seed',type=int,default=1); parser.add_argument('--project-name',default='ramansh_transolver')
-parser.add_argument('--wandb',action='store_true'); parser.add_argument('--save',action='store_true'); parser.add_argument('--norm-grid',action='store_true'); parser.add_argument('--div-loss',action='store_true'); parser.add_argument('--calc-div',action='store_true'); parser.add_argument('--div-loss-weight',type=float,default=1.)
+parser.add_argument('--wandb',action='store_true'); parser.add_argument('--save',action='store_true'); parser.add_argument('--norm-grid',action='store_true'); parser.add_argument('--div-loss',action='store_true'); parser.add_argument('--calc-div',action='store_true'); parser.add_argument('--div-order',type=int,default=2,help='RBF-FD polynomial order for divergence'); parser.add_argument('--div-loss-weight',type=float,default=1.)
 parser.add_argument('--div-folder',default='/projects/bfel/mlowery/transolver_divs'); parser.add_argument('--model-folder',default='/projects/bfel/mlowery/transolver_models'); parser.add_argument('--no-ood',action='store_true')
 args=parser.parse_args(); os.environ['CUDA_VISIBLE_DEVICES']=args.gpu; torch.manual_seed(args.seed); np.random.seed(args.seed)
 if not args.wandb: os.environ['WANDB_MODE']='disabled'
@@ -80,7 +80,7 @@ def main():
         physical=ds.output_points
         if args.dataset in {'taylor_green_spacetime','taylor_green_time','taylor_green_spacetime_coeffs','taylor_green_time_coeffs'}:
             physical=physical.reshape(-1,4,3)[:,0,:2]; div_steps=4
-        ops=tuple(o.cuda() for o in build_rbf_fd_gradient(physical)); mask=torch.ones(len(physical),dtype=torch.bool).cuda()
+        ops=tuple(o.cuda() for o in build_rbf_fd_gradient(physical, order=args.div_order)); mask=torch.ones(len(physical),dtype=torch.bool).cuda()
         metric_mask=build_interior_mask(physical).cuda()
     else:
         metric_mask=None
