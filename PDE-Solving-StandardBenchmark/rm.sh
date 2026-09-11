@@ -11,8 +11,8 @@ sp() {
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=gpuA100x4,gpuA100x8
-#SBATCH --account=bfel-delta-gpu
+#SBATCH --partition=gpuA100x4
+#SBATCH --account=bgcs-delta-gpu
 #SBATCH --job-name=myjob
 #SBATCH --time=8:00:00
 #SBATCH --constraint="scratch"
@@ -37,15 +37,14 @@ EOF
 
 for seed in 1 2 3; do
 for ntrain in 100 500 1000; do 
-sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='taylor_green_exact' --slice-num=64 --n-hidden=32 --n-heads=4 --n-layers=4"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='merge_vortices' --slice-num=32 --n-hidden=128 --n-heads=4 --n-layers=5"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='buoyancy_cavity_flow' --slice-num=16 --n-hidden=128 --n-heads=8 --n-layers=5"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='backward_facing_step' --slice-num=32 --n-hidden=128 --n-heads=4 --n-layers=5"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='flow_cylinder_shedding' --slice-num=16 --n-hidden=128 --n-heads=4 --n-layers=4"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='flow_cylinder_laminar' --slice-num=32 --n-hidden=128 --n-heads=4 --n-layers=4"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='merge_vortices_easier' --slice-num=16 --n-hidden=128 --n-heads=8 --n-layers=4"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='merge_vortices_easier' --slice-num=16 --n-hidden=128 --n-heads=4 --n-layers=4"
-#sp "python3 ramansh_2d.py --wandb --calc-div --save --dataset='lid_cavity_flow' --slice-num=16 --n-hidden=128 --n-heads=4 --n-layers=4"
+sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='taylor_green_exact' --slice-num=64 --n-hidden=32 --n-heads=4 --n-layers=4"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='merge_vortices' --slice-num=32 --n-hidden=128 --n-heads=4 --n-layers=5"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='buoyancy_cavity_flow' --slice-num=16 --n-hidden=128 --n-heads=8 --n-layers=5"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='backward_facing_step' --slice-num=32 --n-hidden=128 --n-heads=4 --n-layers=5"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='flow_cylinder_shedding' --slice-num=16 --n-hidden=128 --n-heads=4 --n-layers=4"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='flow_cylinder_laminar' --slice-num=32 --n-hidden=128 --n-heads=4 --n-layers=4"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='merge_vortices_easier' --slice-num=16 --n-hidden=128 --n-heads=8 --n-layers=4"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='merge_vortices_easier' --slice-num=16 --n-hidden=128 --n-heads=4 --n-layers=4"
+#sp "python3 ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --wandb --calc-div --save --dataset='lid_cavity_flow' --slice-num=16 --n-hidden=128 --n-heads=4 --n-layers=4"
 done
 done
-

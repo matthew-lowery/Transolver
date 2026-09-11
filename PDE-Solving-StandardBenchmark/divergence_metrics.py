@@ -66,8 +66,6 @@ def summarize_divergence(predictions, operators, interior_mask, time_steps=1):
     absolute = divergence.abs()
     interior = absolute[:, interior_mask]
     return {
-        "test_div/max_abs_all": absolute.max().item(),
-        "test_div/median_abs_all": absolute.reshape(-1).median().item(),
         "test_div/max_abs_interior": interior.max().item(),
         "test_div/median_abs_interior": interior.reshape(-1).median().item(),
     }

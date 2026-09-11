@@ -7,6 +7,8 @@ import numpy as np
 from scipy.io import loadmat
 
 
+DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[2] / "ram_dataset"
+
 N_TEST = 200
 N_TEST_OOD = 100
 TIME_LEVELS = (0.7, 0.8, 0.9, 1.0)
@@ -60,7 +62,7 @@ def _data_path(root, problem, ood=False):
         name = "data_ood.mat" if ood else "data_exact_matt.mat"
         return root / "taylor_green" / name
     if problem == "taylor_green_coeffs":
-        name = "data_coeffs_ood.mat" if ood else "data_coeffs.mat"
+        name = "data_coeffs_ood.mat" if ood else "data_coeffs_matt.mat"
         return root / "taylor_green" / name
     if problem in {"taylor_green_time", "taylor_green_time_coeffs"}:
         name = "data_time_ood.mat" if ood else "data_time.mat"
@@ -74,7 +76,7 @@ def _load_mat(root, problem, ood=False):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
     data = loadmat(data_path)
     if problem == "taylor_green_time_coeffs":
-        name = "data_coeffs_ood.mat" if ood else "data_coeffs.mat"
+        name = "data_coeffs_ood.mat" if ood else "data_coeffs_matt.mat"
         coeff_path = Path(root) / "taylor_green" / name
         if not coeff_path.is_file():
             raise FileNotFoundError(
@@ -85,50 +87,52 @@ def _load_mat(root, problem, ood=False):
     return data, None
 
 
-def _fekete_indices(root, problem, size):
+def _fekete_indices(root, problem, points):
     if problem == "flow_cylinder_laminar":
         path = Path(root) / "flow_cylinder" / "flow_cylinder_laminar_fekete.mat"
     elif problem == "flow_cylinder_shedding":
         path = Path(root) / "flow_cylinder" / "flow_cylinder_shedding_fekete.mat"
-    elif problem in {"taylor_green_exact", "taylor_green_coeffs", "taylor_green_time", "taylor_green_time_coeffs"}:
+    elif problem.startswith("taylor_green"):
         path = Path(root) / "taylor_green" / "taylor_green_fekete.mat"
     else:
         path = Path(root) / problem / f"{problem}_fekete.mat"
     if not path.exists():
-        return np.arange(size)
-    indices = np.asarray(loadmat(path)["E"]).squeeze().astype(int)
-    if indices.size and indices.min() >= 1 and indices.max() <= size:
+        return np.arange(len(points))
+
+    raw = np.asarray(loadmat(path)["E"]).reshape(-1)
+    if not np.all(np.isfinite(raw)) or not np.all(raw == np.floor(raw)):
+        raise ValueError(f"Fekete indices must be finite integers: {path}")
+    indices = raw.astype(np.int64)
+    if indices.size and indices.min() == 1:
         indices = indices - 1
+    if not indices.size or indices.min() < 0 or len(np.unique(indices)) != len(indices):
+        raise ValueError(f"Invalid Fekete permutation: {path}")
+
+    if indices.max() >= len(points):
+        raise ValueError(f"Fekete indices exceed the full dataset grid: {path}")
     return indices
 
 
 def _point_filter(problem, points, point_count, root):
+    """Subsample the original grid without excluding boundary points."""
     points = np.asarray(points, dtype=np.float64)
     if problem == "merge_vortices_easier":
         points = points[:, :2]
     keep = np.arange(len(points))
-    if problem in {
-        "taylor_green_exact", "taylor_green_coeffs", "taylor_green_time", "taylor_green_time_coeffs",
-        "merge_vortices_easier",
-    }:
-        keep = np.flatnonzero(~((points[:, 0] == 0) | (points[:, 1] == 0)))
-    elif problem == "forced_turb":
-        keep = np.flatnonzero(~np.any(np.isclose(points, 2 * np.pi), axis=1))
-
-    points = points[keep]
     if point_count is None or point_count >= len(points):
-        return points, keep, np.arange(len(points))
-
-    fekete = _fekete_indices(root, problem, len(points))
-    selected = fekete[:point_count]
+        return points, keep, keep
+    if point_count < 1:
+        raise ValueError("point_count must be positive")
+    selected = _fekete_indices(root, problem, points)[:point_count]
+    if len(selected) != point_count:
+        raise ValueError(f"Only {len(selected)} Fekete points for point_count={point_count}")
     return points[selected], keep, selected
 
 
 def _point_values(values, keep, selected, full_point_count):
     values = np.asarray(values)
     if values.ndim >= 2 and values.shape[1] == full_point_count:
-        values = values[:, keep]
-        values = values[:, selected]
+        values = values[:, keep[selected]]
     return values
 
 
@@ -142,6 +146,8 @@ def _split_indices(problem, count, ntrain, test_count):
     population = train_count + N_TEST
     if count < population:
         raise ValueError(f"{problem} has {count} functions; expected at least {population}")
+    if ntrain < 1 or test_count < 1 or test_count > N_TEST:
+        raise ValueError("Invalid training or test sample count")
     if ntrain > train_count:
         raise ValueError(f"ntrain={ntrain} exceeds {problem}'s {train_count} training functions")
     perm = np.random.default_rng(seed=0).permutation(population)
@@ -311,3 +317,12 @@ def load_ood_dataset(problem, point_count, data_root, test_count=N_TEST_OOD):
     )
     input_points, output_points, _, _, test_input, test_output = geometry
     return input_points, output_points, test_input, test_output
+
+
+def try_load_ood_dataset(problem, point_count, data_root, test_count=N_TEST_OOD):
+    """Missing optional OOD files must not discard a completed training run."""
+    try:
+        return load_ood_dataset(problem, point_count, data_root, test_count)
+    except FileNotFoundError as exc:
+        print(f"OOD unavailable: {exc}")
+        return None

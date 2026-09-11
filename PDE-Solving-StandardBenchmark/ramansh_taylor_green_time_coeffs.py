@@ -1,3 +1,4 @@
+from dataset_boundaries import divergence_interior_mask
 import os
 import argparse
 import numpy as np
@@ -9,6 +10,7 @@ from utils.testloss import TestLoss
 from einops import rearrange
 from model_dict import get_model
 from utils.normalizer import UnitTransformer
+from ram_training_data import add_dataset_arguments, load_training_arrays
 import matplotlib.pyplot as plt
 import time
 import wandb
@@ -48,14 +50,14 @@ parser.add_argument('--calc-div', action='store_true')
 parser.add_argument('--div-order', type=int, default=2,
                     help='RBF-FD polynomial order for divergence')
 parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
-parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno-new')
+add_dataset_arguments(parser, default_points="500")
 parser.add_argument('--model-folder', type=str, default='/projects/bfel/mlowery/transolver_models')
 parser.add_argument('--dataset', type=str, default='taylor_green_time_coeffs')
 
 args = parser.parse_args()
 set_seed(args.seed)
 
-name = f"{args.dataset}_{args.seed}_{args.ntrain}_all" ## all as in no subsample nymore 
+name = f"{args.dataset}_{args.seed}_{args.ntrain}_{args.npoints}"
 if not args.wandb:
     os.environ["WANDB_MODE"] = "disabled"
 wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
@@ -79,8 +81,7 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    data = np.load(os.path.join(args.dir, f'{args.dataset}.npz'))
-    #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
+    data = load_training_arrays(args)
 
     x_grid = data['x_grid']; y_grid = data['y_grid'] # (2, 3) (2000, 3) (10000, 2000, 2) (200, 2000, 2) (200, 2) (10000, 2)
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
@@ -108,11 +109,8 @@ def main():
     #### In this problem, we just assume the coefficents are function values on the output function's grid, which seems reasonable
     x_train = x_normalizer.encode(x_train)
     x_test = x_normalizer.encode(x_test)
-    pad = torch.zeros((x_train.shape[0], 1998, x_train.shape[-1]))
-    x_train = torch.cat((x_train, pad), dim=1)
-
-    pad = torch.zeros((x_test.shape[0], 1998, x_test.shape[-1]))
-    x_test = torch.cat((x_test, pad), dim=1) # (200, 2,1 ) (10000, 2,1 ) --> 200,2000,1, 10k,2000,1
+    x_train = x_train.squeeze(-1)[:, None, :].expand(-1, len(y_grid), -1)
+    x_test = x_test.squeeze(-1)[:, None, :].expand(-1, len(y_grid), -1)
     y_train = y_normalizer.encode(y_train)
 
     x_normalizer.cuda()
@@ -136,7 +134,7 @@ def main():
             o.cuda()
             for o in build_rbf_fd_gradient(physical_grid, order=args.div_order)
         )
-        interior_mask = build_interior_mask(physical_grid).cuda()
+        interior_mask = divergence_interior_mask(physical_grid, args.dataset, args.data_root).cuda()
 
     model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,

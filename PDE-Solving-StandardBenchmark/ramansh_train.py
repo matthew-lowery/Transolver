@@ -1,3 +1,4 @@
+from dataset_boundaries import divergence_interior_mask
 """Transolver training entry point for the RAM operator-dataset format."""
 import argparse, os, time
 import numpy as np
@@ -10,7 +11,7 @@ from itertools import product
 from model_dict import get_model
 from utils.testloss import TestLoss
 from utils.normalizer import UnitTransformer
-from ram_dataset_loader import load_dataset, load_ood_dataset
+from ram_dataset_loader import DEFAULT_DATA_ROOT, load_dataset, load_ood_dataset
 from divergence_metrics import summarize_divergence, interior_mask as build_interior_mask
 
 def build_rbf_fd_gradient(points, order=2):
@@ -49,7 +50,7 @@ def union_grid(a,b):
 parser=argparse.ArgumentParser()
 parser.add_argument('--dataset',default='flow_cylinder_laminar')
 parser.add_argument('--model',default='Transolver_Irregular_Mesh')
-parser.add_argument('--data-root',default='/projects/bgcs/mlowery/ram_dataset')
+parser.add_argument('--data-root', '--dir', dest='data_root', default=str(DEFAULT_DATA_ROOT))
 parser.add_argument('--ntrain',type=int,required=True); parser.add_argument('--npoints',type=int,default=0)
 parser.add_argument('--epochs',type=int,default=500); parser.add_argument('--batch-size',type=int,default=20)
 parser.add_argument('--lr',type=float,default=1e-3); parser.add_argument('--weight_decay',type=float,default=1e-5)
@@ -80,8 +81,8 @@ def main():
         physical=ds.output_points
         if args.dataset in {'taylor_green_spacetime','taylor_green_time','taylor_green_spacetime_coeffs','taylor_green_time_coeffs'}:
             physical=physical.reshape(-1,4,3)[:,0,:2]; div_steps=4
-        ops=tuple(o.cuda() for o in build_rbf_fd_gradient(physical, order=args.div_order)); mask=torch.ones(len(physical),dtype=torch.bool).cuda()
-        metric_mask=build_interior_mask(physical).cuda()
+        ops=tuple(o.cuda() for o in build_rbf_fd_gradient(physical, order=args.div_order)); mask=divergence_interior_mask(physical,args.dataset,args.data_root).cuda()
+        metric_mask=mask
     else:
         metric_mask=None
     model=get_model(args).Model(space_dim=dim,n_layers=args.n_layers,n_hidden=args.n_hidden,dropout=args.dropout,n_head=args.n_heads,Time_Input=False,mlp_ratio=args.mlp_ratio,fun_dim=xtr.shape[-1],out_dim=ytr.shape[-1],slice_num=args.slice_num,ref=args.ref).cuda()
@@ -90,7 +91,7 @@ def main():
         model.train(); total=0
         for p,fx,y in train_loader:
             p,fx,y=p.cuda(),fx.cuda(),y.cuda(); opt.zero_grad(); out=yn.decode(model(p,fx=fx).squeeze(-1))[:,out_idx]; target=yn.decode(y)
-            dl=loss_fn(out,target); vl=divergence_loss(out,ops,mask,div_steps) if ops else out.new_zeros(()); (dl+args.div_loss_weight*vl).backward(); opt.step(); sched.step(); total+=dl.item()
+            dl=loss_fn(out,target); vl=divergence_loss(out,ops,mask,div_steps) if args.div_loss else out.new_zeros(()); (dl+args.div_loss_weight*vl).backward(); opt.step(); sched.step(); total+=dl.item()
         wandb.log({'train_data_loss':total/args.ntrain},step=ep)
     model.eval(); pred=[]; rel=0
     with torch.no_grad():

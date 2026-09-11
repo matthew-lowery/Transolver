@@ -1,3 +1,4 @@
+from dataset_boundaries import divergence_interior_mask
 import os
 import argparse
 import numpy as np
@@ -9,6 +10,7 @@ from utils.testloss import TestLoss
 from einops import rearrange
 from model_dict import get_model
 from utils.normalizer import UnitTransformer
+from ram_training_data import add_dataset_arguments, load_training_arrays
 import matplotlib.pyplot as plt
 import time
 import wandb
@@ -88,29 +90,6 @@ def build_rbf_fd_gradient(points, order=2):
     )
 
 
-def build_interior_mask(points, cylindrical=False):
-    points = np.asarray(points)
-    if cylindrical:
-        radius = np.linalg.norm(points[:, :2], axis=1)
-        boundary = (
-            (points[:, 2] == points[:, 2].min())
-            | (points[:, 2] == points[:, 2].max())
-            | np.isclose(radius, radius.max())
-        )
-    else:
-        spans = np.ptp(points, axis=0)
-        active_axes = spans > 100 * np.finfo(points.dtype).eps
-        active_points = points[:, active_axes]
-        boundary = np.any(
-            (active_points == active_points.min(axis=0))
-            | (active_points == active_points.max(axis=0)),
-            axis=1,
-        )
-    if boundary.all():
-        raise ValueError("Divergence loss has no interior points")
-    return torch.tensor(~boundary, dtype=torch.bool)
-
-
 def divergence_loss(vector_field, gradient_operators, interior_mask, time_steps=1):
     batch_size, _, vector_dim = vector_field.shape
     vector_field = vector_field.reshape(
@@ -160,14 +139,14 @@ parser.add_argument('--div-order', type=int, default=2,
 parser.add_argument('--div-loss', action='store_true')
 parser.add_argument('--div-loss-weight', type=float, default=1.0)
 parser.add_argument('--div-folder', type=str, default='/projects/bfel/mlowery/transolver_divs')
-parser.add_argument('--dir', type=str, default='/projects/bfel/mlowery/geo-fno-new')
+add_dataset_arguments(parser, default_points="500")
 parser.add_argument('--model-folder', type=str, default='/projects/bfel/mlowery/transolver_models')
 parser.add_argument('--dataset', type=str, default='taylor_green_time')
 
 args = parser.parse_args()
 set_seed(args.seed)
 
-name = f"{args.dataset}_{args.seed}_{args.ntrain}_all" ## all as in no subsample nymore 
+name = f"{args.dataset}_{args.seed}_{args.ntrain}_{args.npoints}"
 if not args.wandb:
     os.environ["WANDB_MODE"] = "disabled"
 wandb.login(key='d612cda26a5690e196d092756d668fc2aee8525b')
@@ -191,9 +170,7 @@ def count_parameters(model):
 
 def main():
     ########## load data ########################################################################
-    dataset_filename = 'taylor_green_time' if args.dataset == 'taylor_green_spacetime' else args.dataset
-    data = np.load(os.path.join(args.dir, f'{dataset_filename}.npz'))
-    #data = np.load(f'/home/matt/ram_dataset/geo-fno-new/{args.dataset}.npz')
+    data = load_training_arrays(args)
 
     x_grid = data['x_grid']; y_grid = data['y_grid']
     x_train, x_test, y_train, y_test = data['x_train'], data['x_test'], data['y_train'], data['y_test']
@@ -203,10 +180,12 @@ def main():
     ntest = len(x_test)
     x_train, y_train = x_train[:ntrain], y_train[:ntrain]
 
-    ### norm rect domain to [0,1]^2
     if args.norm_grid:
-        y_grid_min, y_grid_max = np.min(y_grid, axis=0, keepdims=True), np.max(y_grid, axis=0, keepdims=True)
-        y_grid = (y_grid- y_grid_min) / ((y_grid_max - y_grid_min)+1e-6)
+        combined = np.concatenate((x_grid, y_grid))
+        grid_min = combined.min(axis=0, keepdims=True)
+        grid_span = np.maximum(combined.max(axis=0, keepdims=True) - grid_min, 1e-12)
+        x_grid = (x_grid - grid_min) / grid_span
+        y_grid = (y_grid - grid_min) / grid_span
 
     x_train = torch.tensor(x_train, dtype=torch.float32)
     x_test =  torch.tensor(x_test, dtype=torch.float32)
@@ -255,7 +234,7 @@ def main():
             operator.cuda()
             for operator in build_rbf_fd_gradient(physical_grid, order=args.div_order)
         )
-        interior_mask = build_interior_mask(physical_grid).cuda()
+        interior_mask = divergence_interior_mask(physical_grid, args.dataset, args.data_root).cuda()
 
     model = get_model(args).Model(space_dim=3,
                                   n_layers=args.n_layers,

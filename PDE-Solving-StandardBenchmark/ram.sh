@@ -11,8 +11,8 @@ sp() {
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=gpuA100x4,gpuA100x8
-#SBATCH --account=bfel-delta-gpu
+#SBATCH --partition=gpuA100x4
+#SBATCH --account=bgcs-delta-gpu
 #SBATCH --job-name=myjob
 #SBATCH --time=4:00:00
 #SBATCH --constraint="scratch"
@@ -28,6 +28,6 @@ EOF
 }
 for dataset in 'backward_facing_step' 'buoyancy_cavity_flow' 'flow_cylinder_laminar' 'flow_cylinder_shedding' 'lid_cavity_flow' 'merge_vortices' 'taylor_green_exact' 'taylor_green_numerical' "merge_vortices_easier" "backward_facing_step_ood"; do
 for nh in 32 64 128; do
-sp "ramansh_2d.py --dataset=$dataset --n-hidden=$nh"
+sp "ramansh_2d.py --data-root=/projects/bgcs/mlowery/ram_dataset --dataset=$dataset --n-hidden=$nh"
 done
 done

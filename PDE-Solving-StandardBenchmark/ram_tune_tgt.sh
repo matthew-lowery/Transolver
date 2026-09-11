@@ -12,7 +12,7 @@ sp() {
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=gpuA100x4
-#SBATCH --account=bfel-delta-gpu
+#SBATCH --account=bgcs-delta-gpu
 #SBATCH --job-name=myjob
 #SBATCH --time=3:00:00
 #SBATCH --constraint="scratch"
@@ -28,22 +28,22 @@ EOF
 }
 
 #for ns in 16 32 64; do
-#sp "python3 ramansh_taylor_green_time.py --norm-grid --wandb --slice-num=$ns"
+#sp "python3 ramansh_taylor_green_time.py --data-root=/projects/bgcs/mlowery/ram_dataset --norm-grid --wandb --slice-num=$ns"
 #done
 #
 #for nl in 3 5; do
-#sp "python3 ramansh_taylor_green_time.py --norm-grid --wandb --n-layers=$nl"
+#sp "python3 ramansh_taylor_green_time.py --data-root=/projects/bgcs/mlowery/ram_dataset --norm-grid --wandb --n-layers=$nl"
 #done
 #
 #for nh in 64 128; do
-#sp "python3 ramansh_taylor_green_time.py --norm-grid --wandb --n-hidden=$nh"
+#sp "python3 ramansh_taylor_green_time.py --data-root=/projects/bgcs/mlowery/ram_dataset --norm-grid --wandb --n-hidden=$nh"
 #done
 #
 #for nh in 6 8; do
-#sp "python3 ramansh_taylor_green_time.py --norm-grid --wandb --n-heads=$nh"
+#sp "python3 ramansh_taylor_green_time.py --data-root=/projects/bgcs/mlowery/ram_dataset --norm-grid --wandb --n-heads=$nh"
 #done
 #
 
 for seed in 1 2 3; do
-sp "python3 ramansh_taylor_green_time.py --seed=$seed --ntrain=5000 --norm-grid --wandb --n-heads=6 --n-layers=5 --n-hidden=64 --slice-num=32 --save --calc-div"
+sp "python3 ramansh_taylor_green_time.py --data-root=/projects/bgcs/mlowery/ram_dataset --seed=$seed --ntrain=5000 --norm-grid --wandb --n-heads=6 --n-layers=5 --n-hidden=64 --slice-num=32 --save --calc-div"
 done
